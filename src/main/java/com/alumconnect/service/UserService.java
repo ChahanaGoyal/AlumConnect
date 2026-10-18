@@ -154,6 +154,66 @@ public class UserService {
         }
     }
 
+    /**
+     * Authenticates a user by email and password, initializes the user session upon success,
+     * and returns a detailed {@link com.alumconnect.service.dto.LoginResult}.
+     *
+     * <p>Validation flow:
+     * <ol>
+     *   <li>Validates that email and password are provided.</li>
+     *   <li>Retrieves the user from the repository (and specific profile).</li>
+     *   <li>Verifies whether the account is active.</li>
+     *   <li>Verifies the password using {@link PasswordUtil#verifyPassword(String, String)}.</li>
+     *   <li>Establishes the session in {@link com.alumconnect.util.UserSession}.</li>
+     * </ol>
+     *
+     * @param email    the user's email
+     * @param password the user's plain-text password
+     * @return {@link com.alumconnect.service.dto.LoginResult}
+     */
+    public com.alumconnect.service.dto.LoginResult login(String email, String password) {
+        if (email == null || email.isBlank()) {
+            return com.alumconnect.service.dto.LoginResult.failure("Email is required.");
+        }
+        if (password == null || password.isEmpty()) {
+            return com.alumconnect.service.dto.LoginResult.failure("Password is required.");
+        }
+
+        try {
+            Optional<User> userOpt = userRepository.findByEmail(email.trim());
+            if (userOpt.isEmpty()) {
+                return com.alumconnect.service.dto.LoginResult.failure("Invalid email or password.");
+            }
+
+            User user = userOpt.get();
+
+            if (!user.isActive()) {
+                return com.alumconnect.service.dto.LoginResult.failure("Account is inactive. Please contact support.");
+            }
+
+            if (!PasswordUtil.verifyPassword(password, user.getPasswordHash())) {
+                return com.alumconnect.service.dto.LoginResult.failure("Invalid email or password.");
+            }
+
+            com.alumconnect.util.UserSession.getInstance().login(user);
+            return com.alumconnect.service.dto.LoginResult.success(
+                    "Login successful! Welcome back, " + user.getFullName() + ".",
+                    user
+            );
+        } catch (SQLException e) {
+            return com.alumconnect.service.dto.LoginResult.failure("Database error during authentication: " + e.getMessage());
+        } catch (Exception e) {
+            return com.alumconnect.service.dto.LoginResult.failure("Unexpected error during authentication: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Logs out the currently authenticated user by clearing the session.
+     */
+    public void logout() {
+        com.alumconnect.util.UserSession.getInstance().logout();
+    }
+
     // ── Validation Helpers ───────────────────────────────────────────────────
 
     public List<String> validateRegistrationRequest(RegistrationRequest request) {

@@ -4,6 +4,7 @@ import com.alumconnect.model.Alumni;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
+import com.alumconnect.service.StudentProfileService;
 import com.alumconnect.service.UserService;
 import com.alumconnect.service.dto.LoginResult;
 import com.alumconnect.util.UserSession;
@@ -19,6 +20,7 @@ import java.util.Scanner;
 public class AuthUI {
 
     private final UserService userService;
+    private final StudentProfileUI studentProfileUI;
     private final Scanner scanner;
     private final PrintStream out;
 
@@ -32,6 +34,24 @@ public class AuthUI {
 
     public AuthUI(UserService userService, InputStream in, PrintStream out) {
         this.userService = userService;
+        this.scanner = new Scanner(in);
+        this.out = out;
+        // Share the same scanner instance so both UIs read from the same stream without competition
+        this.studentProfileUI = new StudentProfileUI(new StudentProfileService(), this.scanner, out);
+    }
+
+    /**
+     * Constructor allowing injection of {@link StudentProfileUI} for unit testing.
+     *
+     * @param userService      the UserService
+     * @param studentProfileUI the StudentProfileUI
+     * @param in               input stream
+     * @param out              output stream
+     */
+    public AuthUI(UserService userService, StudentProfileUI studentProfileUI,
+                  InputStream in, PrintStream out) {
+        this.userService = userService;
+        this.studentProfileUI = studentProfileUI;
         this.scanner = new Scanner(in);
         this.out = out;
     }
@@ -109,11 +129,47 @@ public class AuthUI {
         }
         out.println("--------------------------------------------------");
         out.println("Student Menu:");
-        out.println("  [1] View My Profile");
+        out.println("  [1] View / Edit My Profile");
         out.println("  [2] Browse Alumni Mentors");
         out.println("  [3] Manage Mentorship Requests");
         out.println("  [4] Logout");
         out.println("--------------------------------------------------");
+
+        // Handle student menu selection
+        handleStudentMenuSelection(student);
+    }
+
+    /**
+     * Reads and dispatches a student menu selection.
+     *
+     * @param student the currently logged-in student
+     */
+    public void handleStudentMenuSelection(Student student) {
+        if (!scanner.hasNextLine()) {
+            return; // no more input (e.g., piped input stream exhausted)
+        }
+        out.print("Enter your choice: ");
+        String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
+
+        switch (choice) {
+            case "1" -> {
+                out.println("\n--- Profile Options ---");
+                out.println("  [V] View profile");
+                out.println("  [E] Edit profile");
+                out.println("  [C] Create profile");
+                out.print("Select: ");
+                String sub = scanner.hasNextLine() ? scanner.nextLine().trim().toUpperCase() : "";
+                if (sub.equals("E")) {
+                    studentProfileUI.promptAndEditProfile();
+                } else if (sub.equals("C")) {
+                    studentProfileUI.promptAndCreateProfile();
+                } else {
+                    studentProfileUI.displayMyProfile();
+                }
+            }
+            case "4" -> handleLogout();
+            default -> out.println("[AlumConnect] Feature coming soon or invalid choice.");
+        }
     }
 
     /**

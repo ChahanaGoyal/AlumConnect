@@ -4,6 +4,7 @@ import com.alumconnect.model.Alumni;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
+import com.alumconnect.service.AlumniProfileService;
 import com.alumconnect.service.StudentProfileService;
 import com.alumconnect.service.UserService;
 import com.alumconnect.service.dto.LoginResult;
@@ -21,6 +22,7 @@ public class AuthUI {
 
     private final UserService userService;
     private final StudentProfileUI studentProfileUI;
+    private final AlumniProfileUI alumniProfileUI;
     private final Scanner scanner;
     private final PrintStream out;
 
@@ -36,12 +38,13 @@ public class AuthUI {
         this.userService = userService;
         this.scanner = new Scanner(in);
         this.out = out;
-        // Share the same scanner instance so both UIs read from the same stream without competition
+        // Share the same scanner instance so child UIs read from the same stream without competition
         this.studentProfileUI = new StudentProfileUI(new StudentProfileService(), this.scanner, out);
+        this.alumniProfileUI = new AlumniProfileUI(new AlumniProfileService(), this.scanner, out);
     }
 
     /**
-     * Constructor allowing injection of {@link StudentProfileUI} for unit testing.
+     * Constructor allowing injection of profile UIs for unit testing.
      *
      * @param userService      the UserService
      * @param studentProfileUI the StudentProfileUI
@@ -50,8 +53,23 @@ public class AuthUI {
      */
     public AuthUI(UserService userService, StudentProfileUI studentProfileUI,
                   InputStream in, PrintStream out) {
+        this(userService, studentProfileUI, new AlumniProfileUI(new AlumniProfileService(), new Scanner(in), out), in, out);
+    }
+
+    /**
+     * Constructor allowing injection of both Student and Alumni profile UIs for unit testing.
+     *
+     * @param userService      the UserService
+     * @param studentProfileUI the StudentProfileUI
+     * @param alumniProfileUI  the AlumniProfileUI
+     * @param in               input stream
+     * @param out              output stream
+     */
+    public AuthUI(UserService userService, StudentProfileUI studentProfileUI,
+                  AlumniProfileUI alumniProfileUI, InputStream in, PrintStream out) {
         this.userService = userService;
         this.studentProfileUI = studentProfileUI;
+        this.alumniProfileUI = alumniProfileUI;
         this.scanner = new Scanner(in);
         this.out = out;
     }
@@ -192,11 +210,47 @@ public class AuthUI {
         }
         out.println("--------------------------------------------------");
         out.println("Alumni Menu:");
-        out.println("  [1] View My Profile");
+        out.println("  [1] View / Edit My Profile");
         out.println("  [2] Review Mentorship Requests");
         out.println("  [3] Update Mentorship Availability");
         out.println("  [4] Logout");
         out.println("--------------------------------------------------");
+
+        // Handle alumni menu selection
+        handleAlumniMenuSelection(alumni);
+    }
+
+    /**
+     * Reads and dispatches an alumni menu selection.
+     *
+     * @param alumni the currently logged-in alumni
+     */
+    public void handleAlumniMenuSelection(Alumni alumni) {
+        if (!scanner.hasNextLine()) {
+            return;
+        }
+        out.print("Enter your choice: ");
+        String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
+
+        switch (choice) {
+            case "1" -> {
+                out.println("\n--- Profile Options ---");
+                out.println("  [V] View profile");
+                out.println("  [E] Edit profile");
+                out.println("  [C] Create profile");
+                out.print("Select: ");
+                String sub = scanner.hasNextLine() ? scanner.nextLine().trim().toUpperCase() : "";
+                if (sub.equals("E")) {
+                    alumniProfileUI.promptAndEditProfile();
+                } else if (sub.equals("C")) {
+                    alumniProfileUI.promptAndCreateProfile();
+                } else {
+                    alumniProfileUI.displayMyProfile();
+                }
+            }
+            case "4" -> handleLogout();
+            default -> out.println("[AlumConnect] Feature coming soon or invalid choice.");
+        }
     }
 
     /**

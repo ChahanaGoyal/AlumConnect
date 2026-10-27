@@ -154,6 +154,11 @@ public class AlumniProfileService {
             return AlumniProfileResult.success(
                     "Your profile has been created successfully.", alumni);
         } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("duplicate") || msg.contains("unique")) {
+                return AlumniProfileResult.failure(
+                        "A profile with these unique details already exists.");
+            }
             return AlumniProfileResult.failure(
                     "Database error while creating your profile: " + e.getMessage());
         }
@@ -220,6 +225,11 @@ public class AlumniProfileService {
             return AlumniProfileResult.success(
                     "Your profile has been updated successfully.", existing);
         } catch (SQLException e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("duplicate") || msg.contains("unique")) {
+                return AlumniProfileResult.failure(
+                        "A profile with these unique details already exists.");
+            }
             return AlumniProfileResult.failure(
                     "Database error while updating your profile: " + e.getMessage());
         }

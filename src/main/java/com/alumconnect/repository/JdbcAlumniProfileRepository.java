@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -103,6 +104,55 @@ public class JdbcAlumniProfileRepository implements AlumniProfileRepository {
                 Alumni alumni = mapRowToAlumni(rs);
                 if (alumni != null) {
                     list.add(alumni);
+                }
+            }
+        }
+        return list;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Executes a parameterized query joining {@code users} and {@code alumni_profiles}
+     * filtering by keyword across full_name, current_company, current_role, industry,
+     * expertise_areas, and department (case-insensitive substring match).
+     */
+    @Override
+    public List<Alumni> searchAlumni(String keyword) throws SQLException {
+        if (keyword == null || keyword.isBlank()) {
+            return Collections.emptyList();
+        }
+        final String pattern = "%" + keyword.trim().toLowerCase() + "%";
+        final String sql =
+                "SELECT u.id AS u_id, u.email, u.password_hash, u.full_name, u.role, u.phone, " +
+                "u.is_active, u.created_at AS u_created_at, u.updated_at AS u_updated_at, " +
+                "ap.id AS ap_id, ap.graduation_year, ap.degree, ap.department, ap.current_company, " +
+                "ap.current_role, ap.industry, ap.years_of_experience, ap.expertise_areas, ap.bio, " +
+                "ap.linkedin_url, ap.is_available_for_mentorship, ap.max_mentees " +
+                "FROM users u " +
+                "LEFT JOIN alumni_profiles ap ON u.id = ap.user_id " +
+                "WHERE u.role = 'ALUMNI' AND u.is_active = TRUE AND (" +
+                "  LOWER(u.full_name) LIKE ? OR " +
+                "  LOWER(COALESCE(ap.current_company, '')) LIKE ? OR " +
+                "  LOWER(COALESCE(ap.current_role, '')) LIKE ? OR " +
+                "  LOWER(COALESCE(ap.industry, '')) LIKE ? OR " +
+                "  LOWER(COALESCE(ap.expertise_areas, '')) LIKE ? OR " +
+                "  LOWER(COALESCE(ap.department, '')) LIKE ?" +
+                ") " +
+                "ORDER BY u.full_name ASC, u.id ASC";
+
+        List<Alumni> list = new ArrayList<>();
+        try (Connection conn = connectionSupplier.get();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 1; i <= 6; i++) {
+                ps.setString(i, pattern);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Alumni alumni = mapRowToAlumni(rs);
+                    if (alumni != null) {
+                        list.add(alumni);
+                    }
                 }
             }
         }

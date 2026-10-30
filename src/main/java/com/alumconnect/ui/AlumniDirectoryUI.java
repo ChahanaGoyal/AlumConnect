@@ -12,9 +12,10 @@ import java.util.Objects;
 import java.util.Scanner;
 
 /**
- * Console UI for the Alumni Directory feature (Prompt 12).
+ * Console UI for the Alumni Directory and Alumni Search features (Prompt 12 &amp; Prompt 13).
  *
- * <p>Allows an authenticated Student to browse a directory of registered alumni.
+ * <p>Allows an authenticated Student to browse a directory of registered alumni
+ * and search for alumni using case-insensitive keywords (name, company, role, industry, skills).
  * Access by unauthorized users (unauthenticated, logged-out, or Alumni role) is
  * rejected with a security error.
  *
@@ -61,23 +62,12 @@ public class AlumniDirectoryUI {
     }
 
     /**
-     * Displays the Alumni Directory to the authenticated student.
+     * Displays the full Alumni Directory to the authenticated student.
      *
      * @throws SecurityException if the active session is unauthenticated or not a Student
      */
     public void showDirectory() {
-        // Enforce access control at the UI boundary
-        UserSession session = UserSession.getInstance();
-        if (!session.isLoggedIn()) {
-            out.println("\n[AlumConnect] Access denied: You must be logged in to view the Alumni Directory.");
-            throw new SecurityException("Unauthorized: No user is currently logged in.");
-        }
-        if (!session.isStudent()) {
-            out.println("\n[AlumConnect] Access denied: The Alumni Directory is only available to Students.");
-            throw new SecurityException(
-                    "Access Denied: Current user role [" + session.getCurrentRole().orElse(null) +
-                    "] cannot access the Alumni Directory.");
-        }
+        validateStudentSession();
 
         out.println("\n==================================================");
         out.println("                 ALUMNI DIRECTORY                 ");
@@ -106,6 +96,96 @@ public class AlumniDirectoryUI {
 
         out.println("==================================================");
         out.println("[INFO] End of Alumni Directory.");
+    }
+
+    /**
+     * Prompts the student to enter a search keyword and displays matching alumni (Prompt 13).
+     *
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void promptAndSearchAlumni() {
+        validateStudentSession();
+
+        out.println("\n==================================================");
+        out.println("                 ALUMNI SEARCH                    ");
+        out.println("==================================================");
+        out.print("Enter search keyword (name, company, role, industry, skills): ");
+
+        if (!scanner.hasNextLine()) {
+            return;
+        }
+
+        String keyword = scanner.nextLine().trim();
+        searchAlumni(keyword);
+    }
+
+    /**
+     * Interactive search alias for callers without arguments.
+     *
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void searchAlumni() {
+        promptAndSearchAlumni();
+    }
+
+    /**
+     * Executes a search for the given keyword and prints the matching alumni cards (Prompt 13).
+     *
+     * @param keyword search keyword (case-insensitive)
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void searchAlumni(String keyword) {
+        validateStudentSession();
+
+        if (keyword == null || keyword.isBlank()) {
+            out.println("[ERROR] Search keyword cannot be empty.");
+            out.println("==================================================");
+            return;
+        }
+
+        String trimmedKeyword = keyword.trim();
+        AlumniDirectoryResult result = directoryService.searchAlumni(trimmedKeyword);
+        if (!result.isSuccess()) {
+            out.println("[ERROR] " + result.getMessage());
+            out.println("==================================================");
+            return;
+        }
+
+        List<Alumni> alumniList = result.getAlumniList();
+        if (alumniList.isEmpty()) {
+            out.println("No alumni found matching '" + trimmedKeyword + "'.");
+            out.println("==================================================");
+            return;
+        }
+
+        out.println("Displaying " + alumniList.size() + " matching alumni for '" + trimmedKeyword + "':");
+        out.println("--------------------------------------------------");
+
+        for (int i = 0; i < alumniList.size(); i++) {
+            printAlumniCard(i + 1, alumniList.get(i));
+        }
+
+        out.println("==================================================");
+        out.println("[INFO] End of Alumni Search Results.");
+    }
+
+    /**
+     * Validates that the active session belongs to an authenticated student.
+     *
+     * @throws SecurityException if unauthenticated or wrong role
+     */
+    private void validateStudentSession() {
+        UserSession session = UserSession.getInstance();
+        if (!session.isLoggedIn()) {
+            out.println("\n[AlumConnect] Access denied: You must be logged in to view the Alumni Directory.");
+            throw new SecurityException("Unauthorized: No user is currently logged in.");
+        }
+        if (!session.isStudent()) {
+            out.println("\n[AlumConnect] Access denied: The Alumni Directory is only available to Students.");
+            throw new SecurityException(
+                    "Access Denied: Current user role [" + session.getCurrentRole().orElse(null) +
+                    "] cannot access the Alumni Directory.");
+        }
     }
 
     /**
@@ -145,4 +225,3 @@ public class AlumniDirectoryUI {
         return (value != null && !value.isBlank()) ? value.trim() : "Not Specified";
     }
 }
-

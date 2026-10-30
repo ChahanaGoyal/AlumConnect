@@ -143,4 +143,33 @@ class JdbcAlumniProfileRepositoryTest {
         assertTrue(found1, "Saved alumni 1 must be present in findAllAlumni()");
         assertTrue(found2, "Saved alumni 2 must be present in findAllAlumni()");
     }
+
+    @Test
+    @DisplayName("Search alumni by keyword returns matching records")
+    void testSearchAlumni() throws SQLException {
+        assumeTrue(dbAvailable, "Skipping: MySQL is not reachable");
+
+        String email = "alumni.search." + System.currentTimeMillis() + "@test.org";
+        Alumni alumni = new Alumni(email, "hashed_pw", "UniqueSearchName", "+1999888777", "Computer Science", 2019);
+        alumni.setCurrentCompany("SearchCompanyTarget");
+        alumni.setCurrentRole("Chief Architect");
+        alumni.setIndustry("FinTech");
+        alumni.setYearsOfExperience(7);
+        alumni.setExpertiseAreas("Kotlin, Microservices");
+        alumni.setAvailableForMentorship(true);
+        Alumni saved = userRepo.saveAlumni(alumni);
+        createdUserIds.add(saved.getId());
+
+        // Search by company (case-insensitive)
+        List<Alumni> companyMatches = profileRepo.searchAlumni("searchcompanytarget");
+        assertTrue(companyMatches.stream().anyMatch(a -> a.getId().equals(saved.getId())));
+
+        // Search by skills
+        List<Alumni> skillMatches = profileRepo.searchAlumni("kotlin");
+        assertTrue(skillMatches.stream().anyMatch(a -> a.getId().equals(saved.getId())));
+
+        // Search by name
+        List<Alumni> nameMatches = profileRepo.searchAlumni("uniquesearchname");
+        assertTrue(nameMatches.stream().anyMatch(a -> a.getId().equals(saved.getId())));
+    }
 }

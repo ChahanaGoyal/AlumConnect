@@ -15,11 +15,12 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Service providing Alumni Directory browsing functionality for authenticated students (Prompt 12).
+ * Service providing Alumni Directory browsing and search functionality for authenticated students
+ * (Prompt 12 &amp; Prompt 13).
  *
  * <p>Enforces the following security invariants:
  * <ul>
- *   <li>Only authenticated students (role = {@link Role#STUDENT}) may view the alumni directory.</li>
+ *   <li>Only authenticated students (role = {@link Role#STUDENT}) may view or search the alumni directory.</li>
  *   <li>Alumni, admin, unauthenticated, and logged-out users are denied access.</li>
  * </ul>
  *
@@ -86,5 +87,55 @@ public class AlumniDirectoryService {
                     "Unexpected error while retrieving alumni directory: " + e.getMessage());
         }
     }
-}
 
+    /**
+     * Searches registered active alumni records matching a keyword across name, company,
+     * role, industry, skills, and department (Prompt 13).
+     *
+     * <p>Validates that the active session belongs to a logged-in student and that
+     * the keyword is not empty before querying.
+     *
+     * @param keyword search keyword (case-insensitive)
+     * @return {@link AlumniDirectoryResult} carrying matching alumni on success, or an error message on failure
+     */
+    public AlumniDirectoryResult searchAlumni(String keyword) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return AlumniDirectoryResult.failure(
+                    "Access denied: You must be logged in to search alumni.");
+        }
+
+        // 2. Role check - search is student-accessible only
+        User user = sessionUser.get();
+        if (user.getRole() != Role.STUDENT) {
+            return AlumniDirectoryResult.failure(
+                    "Access denied: Only students can search the alumni directory.");
+        }
+
+        // 3. Keyword validation
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return AlumniDirectoryResult.failure(
+                    "Search keyword cannot be empty.");
+        }
+
+        String trimmedKeyword = keyword.trim();
+
+        // 4. Database search
+        try {
+            List<Alumni> list = profileRepository.searchAlumni(trimmedKeyword);
+            if (list == null || list.isEmpty()) {
+                return AlumniDirectoryResult.success(
+                        "No alumni found matching '" + trimmedKeyword + "'.", Collections.emptyList());
+            }
+            return AlumniDirectoryResult.success(
+                    "Found " + list.size() + " alumni matching '" + trimmedKeyword + "'.", list);
+        } catch (SQLException e) {
+            return AlumniDirectoryResult.failure(
+                    "Database error while searching alumni: " + e.getMessage());
+        } catch (Exception e) {
+            return AlumniDirectoryResult.failure(
+                    "Unexpected error while searching alumni: " + e.getMessage());
+        }
+    }
+}

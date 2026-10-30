@@ -23,9 +23,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link AlumniDirectoryUI} — Prompt 12.
+ * Unit tests for {@link AlumniDirectoryUI} — Prompt 12 &amp; Prompt 13.
  */
-@DisplayName("Alumni Directory UI Tests (Prompt 12)")
+@DisplayName("Alumni Directory & Search UI Tests (Prompt 12 & 13)")
 class AlumniDirectoryUITest {
 
     private FakeAlumniProfileRepository fakeRepo;
@@ -75,9 +75,15 @@ class AlumniDirectoryUITest {
     }
 
     private AlumniDirectoryUI buildUI(ByteArrayOutputStream capture) {
-        ByteArrayInputStream in = new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8));
+        return buildUI("", capture);
+    }
+
+    private AlumniDirectoryUI buildUI(String input, ByteArrayOutputStream capture) {
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         return new AlumniDirectoryUI(directoryService, in, new PrintStream(capture));
     }
+
+    // ── Directory tests (Prompt 12) ───────────────────────────────────────────
 
     @Test
     @DisplayName("Authenticated student can view alumni directory with all fields displayed")
@@ -204,7 +210,6 @@ class AlumniDirectoryUITest {
                 2022
         );
         incomplete.setId(4);
-        // Do not set currentCompany, currentRole, industry, expertise, etc.
         fakeRepo.addAlumni(incomplete);
 
         ByteArrayOutputStream capture = new ByteArrayOutputStream();
@@ -233,6 +238,109 @@ class AlumniDirectoryUITest {
         assertTrue(output.contains("Database error"));
     }
 
+    // ── Search tests (Prompt 13) ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("promptAndSearchAlumni prompts for keyword and displays matching cards")
+    void testPromptAndSearchAlumniDisplaysMatchingCards() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepo.addAlumni(testAlumni);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI("google\n", capture);
+
+        assertDoesNotThrow(ui::promptAndSearchAlumni);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("ALUMNI SEARCH"));
+        assertTrue(output.contains("Enter search keyword"));
+        assertTrue(output.contains("Displaying 1 matching alumni for 'google':"));
+        assertTrue(output.contains("Priya Verma"));
+        assertTrue(output.contains("Google"));
+        assertTrue(output.contains("Senior Software Engineer"));
+    }
+
+    @Test
+    @DisplayName("searchAlumni with keyword displays matching cards")
+    void testSearchAlumniByKeywordDirectly() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepo.addAlumni(testAlumni);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI(capture);
+
+        assertDoesNotThrow(() -> ui.searchAlumni("Distributed Systems"));
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("Displaying 1 matching alumni for 'Distributed Systems':"));
+        assertTrue(output.contains("Priya Verma"));
+    }
+
+    @Test
+    @DisplayName("searchAlumni with no matches displays informative message")
+    void testSearchAlumniNoMatchesDisplaysMessage() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepo.addAlumni(testAlumni);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI(capture);
+
+        assertDoesNotThrow(() -> ui.searchAlumni("Blockchain XYZ"));
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("No alumni found matching 'Blockchain XYZ'."));
+    }
+
+    @Test
+    @DisplayName("searchAlumni with empty keyword prints error")
+    void testSearchAlumniEmptyKeywordShowsError() {
+        UserSession.getInstance().login(testStudent);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI(capture);
+
+        ui.searchAlumni("   ");
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR] Search keyword cannot be empty."));
+    }
+
+    @Test
+    @DisplayName("searchAlumni by unauthenticated user throws SecurityException")
+    void testSearchAlumniUnauthenticatedThrowsSecurityException() {
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI(capture);
+
+        assertThrows(SecurityException.class, () -> ui.searchAlumni("google"));
+    }
+
+    @Test
+    @DisplayName("searchAlumni by Alumni role user throws SecurityException")
+    void testSearchAlumniAsAlumniThrowsSecurityException() {
+        UserSession.getInstance().login(testAlumni);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI(capture);
+
+        assertThrows(SecurityException.class, () -> ui.searchAlumni("google"));
+    }
+
+    @Test
+    @DisplayName("searchAlumni database error is reported clearly")
+    void testSearchAlumniDatabaseErrorPrintedClearly() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepo.setThrowException(true);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDirectoryUI ui = buildUI(capture);
+
+        assertDoesNotThrow(() -> ui.searchAlumni("google"));
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR]"));
+        assertTrue(output.contains("Database error"));
+    }
+
     // ── In-Memory Fake ────────────────────────────────────────────────────────
 
     private static class FakeAlumniProfileRepository implements AlumniProfileRepository {
@@ -249,6 +357,12 @@ class AlumniDirectoryUITest {
         }
 
         @Override
+        public List<Alumni> searchAlumni(String keyword) throws SQLException {
+            if (throwException) throw new SQLException("Simulated database timeout");
+            return AlumniProfileRepository.super.searchAlumni(keyword);
+        }
+
+        @Override
         public Optional<Alumni> findProfileByUserId(int userId) {
             return list.stream().filter(a -> a.getId().equals(userId)).findFirst();
         }
@@ -258,4 +372,3 @@ class AlumniDirectoryUITest {
         @Override public boolean profileExistsForUser(int userId) { return true; }
     }
 }
-

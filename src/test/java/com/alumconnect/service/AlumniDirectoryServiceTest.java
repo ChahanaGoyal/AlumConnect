@@ -22,9 +22,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link AlumniDirectoryService} — Prompt 12.
+ * Unit tests for {@link AlumniDirectoryService} — Prompt 12 &amp; Prompt 13.
  */
-@DisplayName("Alumni Directory Service Tests (Prompt 12)")
+@DisplayName("Alumni Directory & Search Service Tests (Prompt 12 & 13)")
 class AlumniDirectoryServiceTest {
 
     private FakeAlumniProfileRepository fakeRepository;
@@ -70,6 +70,8 @@ class AlumniDirectoryServiceTest {
     void tearDown() {
         UserSession.getInstance().logout();
     }
+
+    // ── Directory browsing tests (Prompt 12) ──────────────────────────────────
 
     @Test
     @DisplayName("Authenticated student can retrieve alumni directory successfully")
@@ -210,6 +212,130 @@ class AlumniDirectoryServiceTest {
         assertNull(retrieved.getIndustry());
     }
 
+    // ── Search functionality tests (Prompt 13) ────────────────────────────────
+
+    @Test
+    @DisplayName("Search alumni by company name is case-insensitive")
+    void testSearchAlumniByCompanyCaseInsensitive() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.addAlumni(testAlumni);
+
+        Alumni googleAlum = new Alumni("g@t.edu", "hash", "Google Guy", null, "CS", 2019);
+        googleAlum.setId(10);
+        googleAlum.setCurrentCompany("Google LLC");
+        googleAlum.setCurrentRole("Software Engineer");
+        fakeRepository.addAlumni(googleAlum);
+
+        // lowercase search "google"
+        AlumniDirectoryResult resultLower = directoryService.searchAlumni("google");
+        assertTrue(resultLower.isSuccess());
+        assertEquals(1, resultLower.getAlumniList().size());
+        assertEquals("Google Guy", resultLower.getAlumniList().get(0).getFullName());
+
+        // uppercase search "GOOGLE"
+        AlumniDirectoryResult resultUpper = directoryService.searchAlumni("GOOGLE");
+        assertTrue(resultUpper.isSuccess());
+        assertEquals(1, resultUpper.getAlumniList().size());
+        assertEquals("Google Guy", resultUpper.getAlumniList().get(0).getFullName());
+    }
+
+    @Test
+    @DisplayName("Search alumni by skills / expertise is case-insensitive")
+    void testSearchAlumniBySkillsCaseInsensitive() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.addAlumni(testAlumni); // has skills: "Cloud Architecture, Java"
+
+        AlumniDirectoryResult result = directoryService.searchAlumni("java");
+        assertTrue(result.isSuccess());
+        assertEquals(1, result.getAlumniList().size());
+        assertEquals("Priya Verma", result.getAlumniList().get(0).getFullName());
+
+        AlumniDirectoryResult resultUpper = directoryService.searchAlumni("JAVA");
+        assertTrue(resultUpper.isSuccess());
+        assertEquals(1, resultUpper.getAlumniList().size());
+    }
+
+    @Test
+    @DisplayName("Search alumni by name, role, or industry")
+    void testSearchAlumniByNameRoleIndustry() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.addAlumni(testAlumni); // Name: Priya Verma, Role: Staff Engineer, Industry: Software
+
+        // Name
+        AlumniDirectoryResult nameRes = directoryService.searchAlumni("priya");
+        assertTrue(nameRes.isSuccess());
+        assertEquals(1, nameRes.getAlumniList().size());
+
+        // Role
+        AlumniDirectoryResult roleRes = directoryService.searchAlumni("staff engineer");
+        assertTrue(roleRes.isSuccess());
+        assertEquals(1, roleRes.getAlumniList().size());
+
+        // Industry
+        AlumniDirectoryResult indRes = directoryService.searchAlumni("software");
+        assertTrue(indRes.isSuccess());
+        assertEquals(1, indRes.getAlumniList().size());
+    }
+
+    @Test
+    @DisplayName("Search with no matching alumni returns success with zero results and message")
+    void testSearchAlumniNoMatches() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.addAlumni(testAlumni);
+
+        AlumniDirectoryResult result = directoryService.searchAlumni("NonexistentKeywordXYZ");
+        assertTrue(result.isSuccess());
+        assertTrue(result.getAlumniList().isEmpty());
+        assertTrue(result.getMessage().contains("No alumni found matching 'NonexistentKeywordXYZ'"));
+    }
+
+    @Test
+    @DisplayName("Search with empty or whitespace-only keyword fails gracefully")
+    void testSearchAlumniEmptyKeywordFails() {
+        UserSession.getInstance().login(testStudent);
+
+        AlumniDirectoryResult nullRes = directoryService.searchAlumni(null);
+        assertFalse(nullRes.isSuccess());
+        assertTrue(nullRes.getMessage().contains("cannot be empty"));
+
+        AlumniDirectoryResult emptyRes = directoryService.searchAlumni("");
+        assertFalse(emptyRes.isSuccess());
+        assertTrue(emptyRes.getMessage().contains("cannot be empty"));
+
+        AlumniDirectoryResult blankRes = directoryService.searchAlumni("   ");
+        assertFalse(blankRes.isSuccess());
+        assertTrue(blankRes.getMessage().contains("cannot be empty"));
+    }
+
+    @Test
+    @DisplayName("Search alumni by unauthenticated user is rejected")
+    void testSearchAlumniUnauthenticatedRejected() {
+        AlumniDirectoryResult result = directoryService.searchAlumni("google");
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("logged in"));
+    }
+
+    @Test
+    @DisplayName("Search alumni by alumni user is rejected")
+    void testSearchAlumniByAlumniRoleRejected() {
+        UserSession.getInstance().login(testAlumni);
+
+        AlumniDirectoryResult result = directoryService.searchAlumni("google");
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("only students"));
+    }
+
+    @Test
+    @DisplayName("Search alumni handles database error gracefully")
+    void testSearchAlumniDatabaseErrorHandledGracefully() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.setThrowSqlException(true);
+
+        AlumniDirectoryResult result = directoryService.searchAlumni("google");
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("database error"));
+    }
+
     // ── In-Memory Fake Repository ─────────────────────────────────────────────
 
     private static class FakeAlumniProfileRepository implements AlumniProfileRepository {
@@ -230,6 +356,14 @@ class AlumniDirectoryServiceTest {
                 throw new SQLException("Connection to MySQL lost");
             }
             return new ArrayList<>(alumniList);
+        }
+
+        @Override
+        public List<Alumni> searchAlumni(String keyword) throws SQLException {
+            if (throwSqlException) {
+                throw new SQLException("Connection to MySQL lost");
+            }
+            return AlumniProfileRepository.super.searchAlumni(keyword);
         }
 
         @Override
@@ -254,4 +388,3 @@ class AlumniDirectoryServiceTest {
         }
     }
 }
-

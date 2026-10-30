@@ -11,7 +11,7 @@ import java.util.Optional;
  * Data Access interface for alumni profile persistence operations.
  *
  * <p>Handles reading, updating, and creating records in the {@code alumni_profiles}
- * table for an authenticated alumni user, as well as directory retrieval of all alumni.
+ * table for an authenticated alumni user, as well as directory retrieval and search of all alumni.
  */
 public interface AlumniProfileRepository {
 
@@ -67,5 +67,28 @@ public interface AlumniProfileRepository {
      */
     default List<Alumni> findAllAlumni() throws SQLException {
         return Collections.emptyList();
+    }
+
+    /**
+     * Searches registered active alumni records whose name, current company, role,
+     * industry, skills/expertise, or department contains the specified keyword (case-insensitive).
+     *
+     * @param keyword the search term
+     * @return list of matching Alumni profiles; empty list if no alumni match or keyword is blank
+     * @throws SQLException if a database error occurs
+     */
+    default List<Alumni> searchAlumni(String keyword) throws SQLException {
+        if (keyword == null || keyword.isBlank()) {
+            return Collections.emptyList();
+        }
+        String lower = keyword.trim().toLowerCase();
+        return findAllAlumni().stream()
+                .filter(a -> (a.getFullName() != null && a.getFullName().toLowerCase().contains(lower))
+                        || (a.getCurrentCompany() != null && a.getCurrentCompany().toLowerCase().contains(lower))
+                        || (a.getCurrentRole() != null && a.getCurrentRole().toLowerCase().contains(lower))
+                        || (a.getIndustry() != null && a.getIndustry().toLowerCase().contains(lower))
+                        || (a.getExpertiseAreas() != null && a.getExpertiseAreas().toLowerCase().contains(lower))
+                        || (a.getDepartment() != null && a.getDepartment().toLowerCase().contains(lower)))
+                .toList();
     }
 }

@@ -29,17 +29,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Scanner;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link StudentDashboardUI} — Prompt 10 &amp; Prompt 12.
+ * Unit tests for {@link StudentDashboardUI} — Prompt 10, Prompt 12 &amp; Prompt 13.
  *
  * <p>Uses in-memory fakes for all repositories and services so that no real
  * database connection is needed. Every test starts with a clean
  * {@link UserSession} and tears it down afterwards.
  */
-@DisplayName("Student Dashboard Tests (Prompt 10 & 12)")
+@DisplayName("Student Dashboard Tests (Prompt 10, 12 & 13)")
 class StudentDashboardUITest {
 
     // ── Shared test fixtures ──────────────────────────────────────────────────
@@ -105,7 +106,7 @@ class StudentDashboardUITest {
     @Test
     @DisplayName("Unauthenticated user cannot access Student Dashboard")
     void testUnauthenticatedAccessIsRejected() {
-        // No login → session is empty
+        // No login -> session is empty
         StudentDashboardUI dashboard = buildDashboard("", new ByteArrayOutputStream());
         assertThrows(SecurityException.class, dashboard::show,
                 "show() must throw SecurityException when no user is logged in.");
@@ -203,7 +204,7 @@ class StudentDashboardUITest {
     }
 
     @Test
-    @DisplayName("Dashboard menu shows correct options including Browse Alumni")
+    @DisplayName("Dashboard menu shows correct options including Browse and Search Alumni")
     void testMenuShowsCorrectOptions() {
         userService.login("student@thapar.edu", "StudentP@ss1");
 
@@ -214,6 +215,7 @@ class StudentDashboardUITest {
         String output = capture.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("My Profile"), "Profile option must be listed");
         assertTrue(output.contains("Browse Alumni"), "Browse Alumni option must be listed");
+        assertTrue(output.contains("Search Alumni"), "Search Alumni option must be listed");
         assertTrue(output.contains("Logout"),      "Logout option must be listed");
         assertTrue(output.contains("Exit"),        "Exit option must be listed");
     }
@@ -245,6 +247,34 @@ class StudentDashboardUITest {
         assertTrue(output.contains("Google"), "Company must appear");
     }
 
+    @Test
+    @DisplayName("Menu option 3 (Search Alumni) prompts and displays search results")
+    void testSearchAlumniOptionOpensSearch() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        ByteArrayInputStream in = new ByteArrayInputStream("3\nGoogle\n".getBytes(StandardCharsets.UTF_8));
+        PrintStream ps = new PrintStream(capture);
+        Scanner sharedScanner = new Scanner(in);
+
+        FakeStudentProfileService fakeProfileService = new FakeStudentProfileService();
+        StudentProfileUI profileUI = new StudentProfileUI(fakeProfileService, sharedScanner, ps);
+
+        Alumni a = new Alumni("alumni@thapar.edu", "hash", "Search Alum", null, "CS", 2020);
+        a.setCurrentCompany("Google");
+        FakeAlumniDirectoryRepo dirRepo = new FakeAlumniDirectoryRepo(List.of(a));
+        AlumniDirectoryService dirService = new AlumniDirectoryService(dirRepo);
+        AlumniDirectoryUI dirUI = new AlumniDirectoryUI(dirService, sharedScanner, ps);
+
+        StudentDashboardUI dashboard = new StudentDashboardUI(profileUI, dirUI, userService, sharedScanner, ps);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("ALUMNI SEARCH"), "Alumni Search header must appear");
+        assertTrue(output.contains("Search Alum"), "Alumni in search results must appear");
+        assertTrue(output.contains("Google"), "Company must appear");
+    }
+
     // ── Profile sub-menu tests ────────────────────────────────────────────────
 
     @Test
@@ -258,6 +288,7 @@ class StudentDashboardUITest {
         assertDoesNotThrow(dashboard::show);
 
         String output = capture.toString(StandardCharsets.UTF_8);
+        // FakeStudentProfileService.viewMyProfile returns success with a student object
         assertTrue(output.contains("MY STUDENT PROFILE") || output.contains("Profile"),
                 "Profile display must be attempted");
     }
@@ -292,6 +323,7 @@ class StudentDashboardUITest {
         assertTrue(output.contains("Anshika Singh"),     "Student name must appear");
         assertTrue(output.contains("Student Menu"),      "Student Menu label must appear");
         assertTrue(output.contains("Browse Alumni"),     "Browse Alumni option must appear");
+        assertTrue(output.contains("Search Alumni"),     "Search Alumni option must appear");
     }
 
     @Test

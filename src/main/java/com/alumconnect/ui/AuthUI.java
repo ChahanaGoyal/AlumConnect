@@ -201,6 +201,7 @@ public class AuthUI {
         out.println("Student Menu:");
         out.println("  [1] My Profile");
         out.println("  [2] Browse Alumni");
+        out.println("  [3] Search Alumni");
         out.println("  [9] Logout");
         out.println("  [0] Exit");
         out.println("--------------------------------------------------");

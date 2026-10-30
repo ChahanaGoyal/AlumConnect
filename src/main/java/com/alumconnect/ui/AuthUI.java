@@ -23,6 +23,7 @@ public class AuthUI {
     private final UserService userService;
     private final StudentProfileUI studentProfileUI;
     private final AlumniProfileUI alumniProfileUI;
+    private final StudentDashboardUI studentDashboardUI;
     private final Scanner scanner;
     private final PrintStream out;
 
@@ -41,6 +42,7 @@ public class AuthUI {
         // Share the same scanner instance so child UIs read from the same stream without competition
         this.studentProfileUI = new StudentProfileUI(new StudentProfileService(), this.scanner, out);
         this.alumniProfileUI = new AlumniProfileUI(new AlumniProfileService(), this.scanner, out);
+        this.studentDashboardUI = new StudentDashboardUI(this.studentProfileUI, userService, this.scanner, out);
     }
 
     /**
@@ -70,6 +72,28 @@ public class AuthUI {
         this.userService = userService;
         this.studentProfileUI = studentProfileUI;
         this.alumniProfileUI = alumniProfileUI;
+        this.scanner = new Scanner(in);
+        this.out = out;
+        this.studentDashboardUI = new StudentDashboardUI(studentProfileUI, userService, this.scanner, out);
+    }
+
+    /**
+     * Constructor allowing injection of all UIs including StudentDashboardUI for unit testing.
+     *
+     * @param userService        the UserService
+     * @param studentProfileUI   the StudentProfileUI
+     * @param alumniProfileUI    the AlumniProfileUI
+     * @param studentDashboardUI the StudentDashboardUI
+     * @param in                 input stream
+     * @param out                output stream
+     */
+    public AuthUI(UserService userService, StudentProfileUI studentProfileUI,
+                  AlumniProfileUI alumniProfileUI, StudentDashboardUI studentDashboardUI,
+                  InputStream in, PrintStream out) {
+        this.userService = userService;
+        this.studentProfileUI = studentProfileUI;
+        this.alumniProfileUI = alumniProfileUI;
+        this.studentDashboardUI = studentDashboardUI;
         this.scanner = new Scanner(in);
         this.out = out;
     }
@@ -127,6 +151,7 @@ public class AuthUI {
 
     /**
      * Displays the Student Dashboard with student-specific actions and enforces role separation.
+     * Delegates to {@link StudentDashboardUI} which provides the full Prompt 10 implementation.
      *
      * @param student the authenticated Student
      */
@@ -147,47 +172,13 @@ public class AuthUI {
         }
         out.println("--------------------------------------------------");
         out.println("Student Menu:");
-        out.println("  [1] View / Edit My Profile");
-        out.println("  [2] Browse Alumni Mentors");
-        out.println("  [3] Manage Mentorship Requests");
-        out.println("  [4] Logout");
+        out.println("  [1] My Profile");
+        out.println("  [9] Logout");
+        out.println("  [0] Exit");
         out.println("--------------------------------------------------");
 
-        // Handle student menu selection
-        handleStudentMenuSelection(student);
-    }
-
-    /**
-     * Reads and dispatches a student menu selection.
-     *
-     * @param student the currently logged-in student
-     */
-    public void handleStudentMenuSelection(Student student) {
-        if (!scanner.hasNextLine()) {
-            return; // no more input (e.g., piped input stream exhausted)
-        }
-        out.print("Enter your choice: ");
-        String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
-
-        switch (choice) {
-            case "1" -> {
-                out.println("\n--- Profile Options ---");
-                out.println("  [V] View profile");
-                out.println("  [E] Edit profile");
-                out.println("  [C] Create profile");
-                out.print("Select: ");
-                String sub = scanner.hasNextLine() ? scanner.nextLine().trim().toUpperCase() : "";
-                if (sub.equals("E")) {
-                    studentProfileUI.promptAndEditProfile();
-                } else if (sub.equals("C")) {
-                    studentProfileUI.promptAndCreateProfile();
-                } else {
-                    studentProfileUI.displayMyProfile();
-                }
-            }
-            case "4" -> handleLogout();
-            default -> out.println("[AlumConnect] Feature coming soon or invalid choice.");
-        }
+        // Handle student menu selection via the dedicated dashboard UI
+        studentDashboardUI.handleMenuSelection(student);
     }
 
     /**

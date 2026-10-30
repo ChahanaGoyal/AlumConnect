@@ -110,4 +110,37 @@ class JdbcAlumniProfileRepositoryTest {
         assertEquals("Updated alumni bio", refreshed.get().getBio());
         assertEquals(5, refreshed.get().getMaxMentees());
     }
+
+    @Test
+    @DisplayName("Find all alumni retrieves saved alumni in directory order")
+    void testFindAllAlumni() throws SQLException {
+        assumeTrue(dbAvailable, "Skipping: MySQL is not reachable");
+
+        String email1 = "alumni.dir1." + System.currentTimeMillis() + "@test.org";
+        Alumni alumni1 = new Alumni(email1, "hashed_pw", "Dir Alumni One", "+1234567891", "Electrical", 2018);
+        alumni1.setCurrentCompany("Alpha Tech");
+        alumni1.setCurrentRole("Hardware Engineer");
+        alumni1.setYearsOfExperience(5);
+        alumni1.setAvailableForMentorship(true);
+        Alumni saved1 = userRepo.saveAlumni(alumni1);
+        createdUserIds.add(saved1.getId());
+
+        String email2 = "alumni.dir2." + System.currentTimeMillis() + "@test.org";
+        Alumni alumni2 = new Alumni(email2, "hashed_pw", "Dir Alumni Two", "+1234567892", "Civil", 2015);
+        alumni2.setCurrentCompany("Beta Builders");
+        alumni2.setCurrentRole("Project Lead");
+        alumni2.setYearsOfExperience(8);
+        alumni2.setAvailableForMentorship(false);
+        Alumni saved2 = userRepo.saveAlumni(alumni2);
+        createdUserIds.add(saved2.getId());
+
+        List<Alumni> all = profileRepo.findAllAlumni();
+        assertNotNull(all);
+        assertFalse(all.isEmpty());
+
+        boolean found1 = all.stream().anyMatch(a -> a.getId().equals(saved1.getId()));
+        boolean found2 = all.stream().anyMatch(a -> a.getId().equals(saved2.getId()));
+        assertTrue(found1, "Saved alumni 1 must be present in findAllAlumni()");
+        assertTrue(found2, "Saved alumni 2 must be present in findAllAlumni()");
+    }
 }

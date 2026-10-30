@@ -4,8 +4,10 @@ import com.alumconnect.model.Alumni;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
+import com.alumconnect.repository.AlumniProfileRepository;
 import com.alumconnect.repository.StudentProfileRepository;
 import com.alumconnect.repository.UserRepository;
+import com.alumconnect.service.AlumniDirectoryService;
 import com.alumconnect.service.StudentProfileService;
 import com.alumconnect.service.UserService;
 import com.alumconnect.service.dto.StudentProfileResult;
@@ -21,26 +23,29 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link StudentDashboardUI} — Prompt 10.
+ * Unit tests for {@link StudentDashboardUI} — Prompt 10 &amp; Prompt 12.
  *
  * <p>Uses in-memory fakes for all repositories and services so that no real
- * database connection is needed.  Every test starts with a clean
+ * database connection is needed. Every test starts with a clean
  * {@link UserSession} and tears it down afterwards.
  */
-@DisplayName("Student Dashboard Tests (Prompt 10)")
+@DisplayName("Student Dashboard Tests (Prompt 10 & 12)")
 class StudentDashboardUITest {
 
     // ── Shared test fixtures ──────────────────────────────────────────────────
 
     private Student student;
-    private Alumni  alumni;
+    private Alumni alumni;
     private InMemoryUserRepository userRepo;
     private UserService userService;
 
@@ -48,7 +53,7 @@ class StudentDashboardUITest {
     void setUp() throws SQLException {
         UserSession.getInstance().logout();
 
-        userRepo    = new InMemoryUserRepository();
+        userRepo = new InMemoryUserRepository();
         userService = new UserService(userRepo);
 
         // Seed a student
@@ -198,7 +203,7 @@ class StudentDashboardUITest {
     }
 
     @Test
-    @DisplayName("Dashboard menu shows correct options for implemented features only")
+    @DisplayName("Dashboard menu shows correct options including Browse Alumni")
     void testMenuShowsCorrectOptions() {
         userService.login("student@thapar.edu", "StudentP@ss1");
 
@@ -208,8 +213,36 @@ class StudentDashboardUITest {
 
         String output = capture.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("My Profile"), "Profile option must be listed");
+        assertTrue(output.contains("Browse Alumni"), "Browse Alumni option must be listed");
         assertTrue(output.contains("Logout"),      "Logout option must be listed");
         assertTrue(output.contains("Exit"),        "Exit option must be listed");
+    }
+
+    @Test
+    @DisplayName("Menu option 2 (Browse Alumni) launches Alumni Directory")
+    void testBrowseAlumniOptionOpensDirectory() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        ByteArrayInputStream in = new ByteArrayInputStream("2\n".getBytes(StandardCharsets.UTF_8));
+        PrintStream ps = new PrintStream(capture);
+
+        FakeStudentProfileService fakeProfileService = new FakeStudentProfileService();
+        StudentProfileUI profileUI = new StudentProfileUI(fakeProfileService, in, ps);
+
+        Alumni a = new Alumni("alumni@thapar.edu", "hash", "Directory Alum", null, "CS", 2020);
+        a.setCurrentCompany("Google");
+        FakeAlumniDirectoryRepo dirRepo = new FakeAlumniDirectoryRepo(List.of(a));
+        AlumniDirectoryService dirService = new AlumniDirectoryService(dirRepo);
+        AlumniDirectoryUI dirUI = new AlumniDirectoryUI(dirService, in, ps);
+
+        StudentDashboardUI dashboard = new StudentDashboardUI(profileUI, dirUI, userService, in, ps);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("ALUMNI DIRECTORY"), "Alumni Directory header must appear");
+        assertTrue(output.contains("Directory Alum"), "Alumni in directory must appear");
+        assertTrue(output.contains("Google"), "Company must appear");
     }
 
     // ── Profile sub-menu tests ────────────────────────────────────────────────
@@ -225,7 +258,6 @@ class StudentDashboardUITest {
         assertDoesNotThrow(dashboard::show);
 
         String output = capture.toString(StandardCharsets.UTF_8);
-        // FakeStudentProfileService.viewMyProfile returns success with a student object
         assertTrue(output.contains("MY STUDENT PROFILE") || output.contains("Profile"),
                 "Profile display must be attempted");
     }
@@ -259,12 +291,13 @@ class StudentDashboardUITest {
         assertTrue(output.contains("STUDENT DASHBOARD"), "Student Dashboard header must appear");
         assertTrue(output.contains("Anshika Singh"),     "Student name must appear");
         assertTrue(output.contains("Student Menu"),      "Student Menu label must appear");
+        assertTrue(output.contains("Browse Alumni"),     "Browse Alumni option must appear");
     }
 
     @Test
     @DisplayName("AuthUI does not route Alumni to Student Dashboard")
     void testAuthUIDoesNotRouteAlumniToStudentDashboard() {
-        String input = "alumni@thapar.edu\nAlumniP@ss1\n4\n";
+        String input = "alumni@thapar.edu\nAlumniP@ss1\n0\n";
         ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream capture = new ByteArrayOutputStream();
 
@@ -358,44 +391,55 @@ class StudentDashboardUITest {
 
     /**
      * Fake StudentProfileService that never hits the database.
-     * Returns a pre-built Student profile for viewMyProfile(), and no-ops for create/update.
      */
     private static class FakeStudentProfileService extends StudentProfileService {
-
-        private final StudentProfileRepository noOpRepo = new StudentProfileRepository() {
-            @Override public Optional<Student> findProfileByUserId(int userId) { return Optional.empty(); }
-            @Override public boolean updateProfile(Student student) { return true; }
-            @Override public boolean createProfile(Student student) { return true; }
-            @Override public boolean profileExistsForUser(int userId) { return false; }
-        };
-
         FakeStudentProfileService() {
-            super(/* repository injected via reflection not needed — we override methods */
-                    new StudentProfileRepository() {
-                        @Override public Optional<Student> findProfileByUserId(int userId) { return Optional.empty(); }
-                        @Override public boolean updateProfile(Student student) { return true; }
-                        @Override public boolean createProfile(Student student) { return true; }
-                        @Override public boolean profileExistsForUser(int userId) { return false; }
-                    });
+            super(new StudentProfileRepository() {
+                @Override public Optional<Student> findProfileByUserId(int userId) { return Optional.empty(); }
+                @Override public boolean updateProfile(Student student) { return true; }
+                @Override public boolean createProfile(Student student) { return true; }
+                @Override public boolean profileExistsForUser(int userId) { return false; }
+            });
         }
 
         @Override
         public StudentProfileResult viewMyProfile() {
-            // Return failure so StudentProfileUI prints "[ERROR] ..." rather than null student
-            return StudentProfileResult.failure(
-                    "No profile found (test stub — no DB connection).");
+            return StudentProfileResult.failure("No profile found (test stub — no DB connection).");
         }
 
         @Override
-        public StudentProfileResult createMyProfile(
-                com.alumconnect.service.dto.StudentProfileRequest req) {
+        public StudentProfileResult createMyProfile(com.alumconnect.service.dto.StudentProfileRequest req) {
             return StudentProfileResult.failure("Create profile stub (no DB in test).");
         }
 
         @Override
-        public StudentProfileResult updateMyProfile(
-                com.alumconnect.service.dto.StudentProfileRequest req) {
+        public StudentProfileResult updateMyProfile(com.alumconnect.service.dto.StudentProfileRequest req) {
             return StudentProfileResult.failure("Update profile stub (no DB in test).");
         }
+    }
+
+    /**
+     * Fake AlumniProfileRepository for directory testing.
+     */
+    private static class FakeAlumniDirectoryRepo implements AlumniProfileRepository {
+        private final List<Alumni> list;
+
+        FakeAlumniDirectoryRepo(List<Alumni> list) {
+            this.list = list != null ? list : Collections.emptyList();
+        }
+
+        @Override
+        public List<Alumni> findAllAlumni() {
+            return new ArrayList<>(list);
+        }
+
+        @Override
+        public Optional<Alumni> findProfileByUserId(int userId) {
+            return list.stream().filter(a -> a.getId().equals(userId)).findFirst();
+        }
+
+        @Override public boolean updateProfile(Alumni a) { return true; }
+        @Override public boolean createProfile(Alumni a) { return true; }
+        @Override public boolean profileExistsForUser(int userId) { return true; }
     }
 }

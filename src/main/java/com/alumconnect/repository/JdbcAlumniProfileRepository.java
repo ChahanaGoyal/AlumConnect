@@ -10,6 +10,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -66,40 +68,109 @@ public class JdbcAlumniProfileRepository implements AlumniProfileRepository {
             ps.setInt(1, userId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    Alumni alumni = new Alumni();
-                    alumni.setId(rs.getInt("u_id"));
-                    alumni.setEmail(rs.getString("email"));
-                    alumni.setPasswordHash(rs.getString("password_hash"));
-                    alumni.setFullName(rs.getString("full_name"));
-                    alumni.setRole(Role.ALUMNI);
-                    alumni.setPhone(rs.getString("phone"));
-                    alumni.setActive(rs.getBoolean("is_active"));
-
-                    Timestamp createdTs = rs.getTimestamp("u_created_at");
-                    if (createdTs != null) alumni.setCreatedAt(createdTs.toLocalDateTime());
-                    Timestamp updatedTs = rs.getTimestamp("u_updated_at");
-                    if (updatedTs != null) alumni.setUpdatedAt(updatedTs.toLocalDateTime());
-
-                    alumni.setProfileId(rs.getInt("ap_id"));
-                    alumni.setGraduationYear(rs.getInt("graduation_year"));
-                    String degree = rs.getString("degree");
-                    if (degree != null) alumni.setDegree(degree);
-                    alumni.setDepartment(rs.getString("department"));
-                    alumni.setCurrentCompany(rs.getString("current_company"));
-                    alumni.setCurrentRole(rs.getString("current_role"));
-                    alumni.setIndustry(rs.getString("industry"));
-                    alumni.setYearsOfExperience(rs.getInt("years_of_experience"));
-                    alumni.setExpertiseAreas(rs.getString("expertise_areas"));
-                    alumni.setBio(rs.getString("bio"));
-                    alumni.setLinkedinUrl(rs.getString("linkedin_url"));
-                    alumni.setAvailableForMentorship(rs.getBoolean("is_available_for_mentorship"));
-                    alumni.setMaxMentees(rs.getInt("max_mentees"));
-
-                    return Optional.of(alumni);
+                    return Optional.ofNullable(mapRowToAlumni(rs));
                 }
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Executes a query joining {@code users} and {@code alumni_profiles} to return all
+     * registered active alumni on the platform, ordered alphabetically by full name.
+     */
+    @Override
+    public List<Alumni> findAllAlumni() throws SQLException {
+        final String sql =
+                "SELECT u.id AS u_id, u.email, u.password_hash, u.full_name, u.role, u.phone, " +
+                "u.is_active, u.created_at AS u_created_at, u.updated_at AS u_updated_at, " +
+                "ap.id AS ap_id, ap.graduation_year, ap.degree, ap.department, ap.current_company, " +
+                "ap.current_role, ap.industry, ap.years_of_experience, ap.expertise_areas, ap.bio, " +
+                "ap.linkedin_url, ap.is_available_for_mentorship, ap.max_mentees " +
+                "FROM users u " +
+                "LEFT JOIN alumni_profiles ap ON u.id = ap.user_id " +
+                "WHERE u.role = 'ALUMNI' AND u.is_active = TRUE " +
+                "ORDER BY u.full_name ASC, u.id ASC";
+
+        List<Alumni> list = new ArrayList<>();
+        try (Connection conn = connectionSupplier.get();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                Alumni alumni = mapRowToAlumni(rs);
+                if (alumni != null) {
+                    list.add(alumni);
+                }
+            }
+        }
+        return list;
+    }
+
+    /**
+     * Maps a ResultSet row joining {@code users} and optionally {@code alumni_profiles}
+     * into a fully populated {@link Alumni} model. Handles missing profile columns gracefully.
+     *
+     * @param rs the ResultSet cursor positioned at a valid row
+     * @return populated Alumni object, or null if essential user identification is invalid
+     * @throws SQLException if a database error occurs during extraction
+     */
+    private Alumni mapRowToAlumni(ResultSet rs) throws SQLException {
+        int userId = rs.getInt("u_id");
+        if (userId <= 0) {
+            return null;
+        }
+
+        Alumni alumni = new Alumni();
+        alumni.setId(userId);
+        alumni.setEmail(rs.getString("email"));
+        alumni.setPasswordHash(rs.getString("password_hash"));
+        String fullName = rs.getString("full_name");
+        alumni.setFullName(fullName != null ? fullName : "Unknown Alumni");
+        alumni.setRole(Role.ALUMNI);
+        alumni.setPhone(rs.getString("phone"));
+        alumni.setActive(rs.getBoolean("is_active"));
+
+        Timestamp createdTs = rs.getTimestamp("u_created_at");
+        if (createdTs != null) alumni.setCreatedAt(createdTs.toLocalDateTime());
+        Timestamp updatedTs = rs.getTimestamp("u_updated_at");
+        if (updatedTs != null) alumni.setUpdatedAt(updatedTs.toLocalDateTime());
+
+        // Map alumni_profiles columns if row exists (LEFT JOIN check)
+        Object apIdObj = rs.getObject("ap_id");
+        if (apIdObj != null) {
+            alumni.setProfileId(rs.getInt("ap_id"));
+
+            int gradYear = rs.getInt("graduation_year");
+            if (gradYear >= Alumni.MIN_GRAD_YEAR && gradYear <= Alumni.MAX_GRAD_YEAR) {
+                alumni.setGraduationYear(gradYear);
+            }
+
+            String degree = rs.getString("degree");
+            if (degree != null && !degree.isBlank()) {
+                alumni.setDegree(degree);
+            }
+
+            alumni.setDepartment(rs.getString("department"));
+            alumni.setCurrentCompany(rs.getString("current_company"));
+            alumni.setCurrentRole(rs.getString("current_role"));
+            alumni.setIndustry(rs.getString("industry"));
+
+            int exp = rs.getInt("years_of_experience");
+            if (exp >= 0) {
+                alumni.setYearsOfExperience(exp);
+            }
+
+            alumni.setExpertiseAreas(rs.getString("expertise_areas"));
+            alumni.setBio(rs.getString("bio"));
+            alumni.setLinkedinUrl(rs.getString("linkedin_url"));
+            alumni.setAvailableForMentorship(rs.getBoolean("is_available_for_mentorship"));
+            alumni.setMaxMentees(rs.getInt("max_mentees"));
+        }
+
+        return alumni;
     }
 
     /**

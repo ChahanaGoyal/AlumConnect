@@ -3,13 +3,15 @@ package com.alumconnect.repository;
 import com.alumconnect.model.Alumni;
 
 import java.sql.SQLException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 /**
  * Data Access interface for alumni profile persistence operations.
  *
  * <p>Handles reading, updating, and creating records in the {@code alumni_profiles}
- * table for an authenticated alumni user.
+ * table for an authenticated alumni user, as well as directory retrieval of all alumni.
  */
 public interface AlumniProfileRepository {
 
@@ -55,4 +57,15 @@ public interface AlumniProfileRepository {
      * @throws SQLException if a database error occurs
      */
     boolean profileExistsForUser(int userId) throws SQLException;
+
+    /**
+     * Retrieves all registered active alumni records for the alumni directory, joining
+     * {@code users} and {@code alumni_profiles} where {@code role = 'ALUMNI'} and {@code is_active = TRUE}.
+     *
+     * @return list of Alumni profiles; empty list if no alumni found
+     * @throws SQLException if a database error occurs
+     */
+    default List<Alumni> findAllAlumni() throws SQLException {
+        return Collections.emptyList();
+    }
 }

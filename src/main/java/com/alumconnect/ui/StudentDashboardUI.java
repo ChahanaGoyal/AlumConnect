@@ -3,6 +3,7 @@ package com.alumconnect.ui;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
+import com.alumconnect.service.AlumniDirectoryService;
 import com.alumconnect.service.StudentProfileService;
 import com.alumconnect.service.UserService;
 import com.alumconnect.util.UserSession;
@@ -12,7 +13,7 @@ import java.io.PrintStream;
 import java.util.Scanner;
 
 /**
- * Console UI for the Student Dashboard (Prompt 10).
+ * Console UI for the Student Dashboard (Prompt 10 &amp; Prompt 12).
  *
  * <p>Displays a role-gated menu to an authenticated Student and routes input
  * to the appropriate sub-feature UIs. The dashboard can only be entered by a
@@ -25,28 +26,31 @@ import java.util.Scanner;
  *
  * <p>Implemented features accessible from this dashboard:
  * <ol>
- *   <li>View my student profile</li>
- *   <li>Create my student profile (if none exists)</li>
- *   <li>Update my student profile</li>
+ *   <li>My Profile: view, create, edit student profile</li>
+ *   <li>Browse Alumni: explore registered alumni directory (Prompt 12)</li>
  *   <li>Logout</li>
  *   <li>Exit</li>
  * </ol>
  *
- * <p>Business logic is never duplicated here; the dashboard delegates entirely
- * to {@link StudentProfileService} via {@link StudentProfileUI}, and to
- * {@link UserService} for session management.
+ * <p>Business logic is never duplicated here; the dashboard delegates to
+ * {@link StudentProfileService} via {@link StudentProfileUI},
+ * {@link AlumniDirectoryService} via {@link AlumniDirectoryUI},
+ * and {@link UserService} for session management.
  */
 public class StudentDashboardUI {
 
     // ── Dashboard menu option constants ──────────────────────────────────────
     /** Menu option: show the profile sub-menu (view / create / edit). */
-    public static final String OPTION_PROFILE  = "1";
+    public static final String OPTION_PROFILE       = "1";
+    /** Menu option: browse the alumni directory. */
+    public static final String OPTION_BROWSE_ALUMNI = "2";
     /** Menu option: log the student out. */
-    public static final String OPTION_LOGOUT   = "9";
+    public static final String OPTION_LOGOUT        = "9";
     /** Menu option: exit the application. */
-    public static final String OPTION_EXIT     = "0";
+    public static final String OPTION_EXIT          = "0";
 
     private final StudentProfileUI studentProfileUI;
+    private final AlumniDirectoryUI alumniDirectoryUI;
     private final UserService userService;
     private final Scanner scanner;
     private final PrintStream out;
@@ -57,7 +61,7 @@ public class StudentDashboardUI {
      * Production constructor — wires real services and uses {@code System.in/out}.
      */
     public StudentDashboardUI() {
-        this(new StudentProfileUI(), new UserService(), System.in, System.out);
+        this(new StudentProfileUI(), new AlumniDirectoryUI(), new UserService(), System.in, System.out);
     }
 
     /**
@@ -69,13 +73,10 @@ public class StudentDashboardUI {
      * @param out              output stream
      */
     public StudentDashboardUI(StudentProfileUI studentProfileUI,
-                               UserService userService,
-                               InputStream in,
-                               PrintStream out) {
-        this.studentProfileUI = studentProfileUI;
-        this.userService = userService;
-        this.scanner = new Scanner(in);
-        this.out = out;
+                              UserService userService,
+                              InputStream in,
+                              PrintStream out) {
+        this(studentProfileUI, userService, new Scanner(in), out);
     }
 
     /**
@@ -88,10 +89,49 @@ public class StudentDashboardUI {
      * @param out              output stream
      */
     public StudentDashboardUI(StudentProfileUI studentProfileUI,
-                               UserService userService,
-                               Scanner scanner,
-                               PrintStream out) {
+                              UserService userService,
+                              Scanner scanner,
+                              PrintStream out) {
+        this(studentProfileUI,
+             new AlumniDirectoryUI(new AlumniDirectoryService(), scanner, out),
+             userService,
+             scanner,
+             out);
+    }
+
+    /**
+     * Constructor allowing injection of both profile and alumni directory UIs.
+     *
+     * @param studentProfileUI  the student profile UI
+     * @param alumniDirectoryUI the alumni directory UI
+     * @param userService       the user service
+     * @param in                input stream
+     * @param out               output stream
+     */
+    public StudentDashboardUI(StudentProfileUI studentProfileUI,
+                              AlumniDirectoryUI alumniDirectoryUI,
+                              UserService userService,
+                              InputStream in,
+                              PrintStream out) {
+        this(studentProfileUI, alumniDirectoryUI, userService, new Scanner(in), out);
+    }
+
+    /**
+     * Full dependency-injection constructor with shared Scanner.
+     *
+     * @param studentProfileUI  the student profile UI
+     * @param alumniDirectoryUI the alumni directory UI
+     * @param userService       the user service
+     * @param scanner           a pre-created, shared Scanner
+     * @param out               output stream
+     */
+    public StudentDashboardUI(StudentProfileUI studentProfileUI,
+                              AlumniDirectoryUI alumniDirectoryUI,
+                              UserService userService,
+                              Scanner scanner,
+                              PrintStream out) {
         this.studentProfileUI = studentProfileUI;
+        this.alumniDirectoryUI = alumniDirectoryUI;
         this.userService = userService;
         this.scanner = scanner;
         this.out = out;
@@ -165,9 +205,10 @@ public class StudentDashboardUI {
         }
         out.println("--------------------------------------------------");
         out.println("Student Menu:");
-        out.println("  [" + OPTION_PROFILE  + "] My Profile");
-        out.println("  [" + OPTION_LOGOUT   + "] Logout");
-        out.println("  [" + OPTION_EXIT     + "] Exit");
+        out.println("  [" + OPTION_PROFILE       + "] My Profile");
+        out.println("  [" + OPTION_BROWSE_ALUMNI + "] Browse Alumni");
+        out.println("  [" + OPTION_LOGOUT        + "] Logout");
+        out.println("  [" + OPTION_EXIT          + "] Exit");
         out.println("--------------------------------------------------");
     }
 
@@ -189,13 +230,29 @@ public class StudentDashboardUI {
         String choice = scanner.nextLine().trim();
 
         switch (choice) {
-            case OPTION_PROFILE -> handleProfileSubMenu();
-            case OPTION_LOGOUT  -> handleLogout();
-            case OPTION_EXIT    -> {
+            case OPTION_PROFILE       -> handleProfileSubMenu();
+            case OPTION_BROWSE_ALUMNI -> handleBrowseAlumni();
+            case OPTION_LOGOUT        -> handleLogout();
+            case OPTION_EXIT          -> {
                 out.println("\n[AlumConnect] Goodbye! Thank you for using AlumConnect.");
             }
             default -> out.println("[AlumConnect] Invalid choice '" + choice
                     + "'. Please enter one of the listed options.");
+        }
+    }
+
+    // ── Browse Alumni ─────────────────────────────────────────────────────────
+
+    /**
+     * Opens the Alumni Directory UI for the student to browse available alumni.
+     */
+    public void handleBrowseAlumni() {
+        try {
+            alumniDirectoryUI.showDirectory();
+        } catch (SecurityException e) {
+            out.println("[AlumConnect] Access denied: " + e.getMessage());
+        } catch (Exception e) {
+            out.println("[AlumConnect] An unexpected error occurred: " + e.getMessage());
         }
     }
 

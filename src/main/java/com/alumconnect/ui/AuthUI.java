@@ -24,6 +24,7 @@ public class AuthUI {
     private final StudentProfileUI studentProfileUI;
     private final AlumniProfileUI alumniProfileUI;
     private final StudentDashboardUI studentDashboardUI;
+    private final AlumniDashboardUI alumniDashboardUI;
     private final Scanner scanner;
     private final PrintStream out;
 
@@ -43,6 +44,7 @@ public class AuthUI {
         this.studentProfileUI = new StudentProfileUI(new StudentProfileService(), this.scanner, out);
         this.alumniProfileUI = new AlumniProfileUI(new AlumniProfileService(), this.scanner, out);
         this.studentDashboardUI = new StudentDashboardUI(this.studentProfileUI, userService, this.scanner, out);
+        this.alumniDashboardUI = new AlumniDashboardUI(this.alumniProfileUI, userService, this.scanner, out);
     }
 
     /**
@@ -75,6 +77,7 @@ public class AuthUI {
         this.scanner = new Scanner(in);
         this.out = out;
         this.studentDashboardUI = new StudentDashboardUI(studentProfileUI, userService, this.scanner, out);
+        this.alumniDashboardUI = new AlumniDashboardUI(alumniProfileUI, userService, this.scanner, out);
     }
 
     /**
@@ -94,6 +97,30 @@ public class AuthUI {
         this.studentProfileUI = studentProfileUI;
         this.alumniProfileUI = alumniProfileUI;
         this.studentDashboardUI = studentDashboardUI;
+        this.scanner = new Scanner(in);
+        this.out = out;
+        this.alumniDashboardUI = new AlumniDashboardUI(alumniProfileUI, userService, this.scanner, out);
+    }
+
+    /**
+     * Constructor allowing injection of all UIs including both dashboards for unit testing.
+     *
+     * @param userService        the UserService
+     * @param studentProfileUI   the StudentProfileUI
+     * @param alumniProfileUI    the AlumniProfileUI
+     * @param studentDashboardUI the StudentDashboardUI
+     * @param alumniDashboardUI  the AlumniDashboardUI
+     * @param in                 input stream
+     * @param out                output stream
+     */
+    public AuthUI(UserService userService, StudentProfileUI studentProfileUI,
+                  AlumniProfileUI alumniProfileUI, StudentDashboardUI studentDashboardUI,
+                  AlumniDashboardUI alumniDashboardUI, InputStream in, PrintStream out) {
+        this.userService = userService;
+        this.studentProfileUI = studentProfileUI;
+        this.alumniProfileUI = alumniProfileUI;
+        this.studentDashboardUI = studentDashboardUI;
+        this.alumniDashboardUI = alumniDashboardUI;
         this.scanner = new Scanner(in);
         this.out = out;
     }
@@ -183,6 +210,7 @@ public class AuthUI {
 
     /**
      * Displays the Alumni Dashboard with alumni-specific actions and enforces role separation.
+     * Delegates to {@link AlumniDashboardUI} which provides the full Prompt 11 implementation.
      *
      * @param alumni the authenticated Alumni
      */
@@ -194,21 +222,23 @@ public class AuthUI {
         out.println("               ALUMNI DASHBOARD                   ");
         out.println("==================================================");
         out.println("Welcome, " + alumni.getFullName() + "!");
-        out.println(alumni.getProfessionalSummary());
+        String summary = alumni.getProfessionalSummary();
+        if (summary != null && !summary.isBlank()) {
+            out.println(summary);
+        }
         out.println("Mentorship Status: " + alumni.getMentorshipStatus() + " (Max Mentees: " + alumni.getMaxMentees() + ")");
-        if (alumni.getExpertiseAreas() != null) {
-            out.println("Expertise: " + alumni.getExpertiseAreas());
+        if (alumni.getExpertiseAreas() != null && !alumni.getExpertiseAreas().isBlank()) {
+            out.println("Expertise        : " + alumni.getExpertiseAreas());
         }
         out.println("--------------------------------------------------");
         out.println("Alumni Menu:");
-        out.println("  [1] View / Edit My Profile");
-        out.println("  [2] Review Mentorship Requests");
-        out.println("  [3] Update Mentorship Availability");
-        out.println("  [4] Logout");
+        out.println("  [1] My Profile");
+        out.println("  [9] Logout");
+        out.println("  [0] Exit");
         out.println("--------------------------------------------------");
 
-        // Handle alumni menu selection
-        handleAlumniMenuSelection(alumni);
+        // Handle alumni menu selection via the dedicated dashboard UI
+        alumniDashboardUI.handleMenuSelection(alumni);
     }
 
     /**
@@ -217,31 +247,7 @@ public class AuthUI {
      * @param alumni the currently logged-in alumni
      */
     public void handleAlumniMenuSelection(Alumni alumni) {
-        if (!scanner.hasNextLine()) {
-            return;
-        }
-        out.print("Enter your choice: ");
-        String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
-
-        switch (choice) {
-            case "1" -> {
-                out.println("\n--- Profile Options ---");
-                out.println("  [V] View profile");
-                out.println("  [E] Edit profile");
-                out.println("  [C] Create profile");
-                out.print("Select: ");
-                String sub = scanner.hasNextLine() ? scanner.nextLine().trim().toUpperCase() : "";
-                if (sub.equals("E")) {
-                    alumniProfileUI.promptAndEditProfile();
-                } else if (sub.equals("C")) {
-                    alumniProfileUI.promptAndCreateProfile();
-                } else {
-                    alumniProfileUI.displayMyProfile();
-                }
-            }
-            case "4" -> handleLogout();
-            default -> out.println("[AlumConnect] Feature coming soon or invalid choice.");
-        }
+        alumniDashboardUI.handleMenuSelection(alumni);
     }
 
     /**

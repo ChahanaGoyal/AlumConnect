@@ -2,6 +2,7 @@ package com.alumconnect.repository;
 
 import com.alumconnect.model.Alumni;
 import com.alumconnect.model.Role;
+import com.alumconnect.service.dto.AlumniFilterCriteria;
 import com.alumconnect.util.ConnectionPool;
 
 import java.sql.Connection;
@@ -147,6 +148,89 @@ public class JdbcAlumniProfileRepository implements AlumniProfileRepository {
             for (int i = 1; i <= 6; i++) {
                 ps.setString(i, pattern);
             }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Alumni alumni = mapRowToAlumni(rs);
+                    if (alumni != null) {
+                        list.add(alumni);
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Executes a parameterized query joining {@code users} and {@code alumni_profiles}
+     * filtering by structured criteria (Prompt 14) with conjunction (AND logic).
+     */
+    @Override
+    public List<Alumni> filterAlumni(AlumniFilterCriteria criteria) throws SQLException {
+        if (criteria == null || !criteria.hasAnyFilter()) {
+            return findAllAlumni();
+        }
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT u.id AS u_id, u.email, u.password_hash, u.full_name, u.role, u.phone, " +
+                "u.is_active, u.created_at AS u_created_at, u.updated_at AS u_updated_at, " +
+                "ap.id AS ap_id, ap.graduation_year, ap.degree, ap.department, ap.current_company, " +
+                "ap.current_role, ap.industry, ap.years_of_experience, ap.expertise_areas, ap.bio, " +
+                "ap.linkedin_url, ap.is_available_for_mentorship, ap.max_mentees " +
+                "FROM users u " +
+                "INNER JOIN alumni_profiles ap ON u.id = ap.user_id " +
+                "WHERE u.role = 'ALUMNI' AND u.is_active = TRUE");
+
+        List<Object> params = new ArrayList<>();
+
+        if (criteria.getGraduationYear() != null) {
+            sql.append(" AND ap.graduation_year = ?");
+            params.add(criteria.getGraduationYear());
+        }
+
+        if (criteria.getIndustry() != null && !criteria.getIndustry().isBlank()) {
+            sql.append(" AND LOWER(COALESCE(ap.industry, '')) LIKE ?");
+            params.add("%" + criteria.getIndustry().trim().toLowerCase() + "%");
+        }
+
+        if (criteria.getMinExperience() != null) {
+            sql.append(" AND ap.years_of_experience >= ?");
+            params.add(criteria.getMinExperience());
+        }
+
+        if (criteria.getMentorshipAvailable() != null) {
+            sql.append(" AND ap.is_available_for_mentorship = ?");
+            params.add(criteria.getMentorshipAvailable());
+        }
+
+        if (criteria.getDepartment() != null && !criteria.getDepartment().isBlank()) {
+            sql.append(" AND LOWER(COALESCE(ap.department, '')) LIKE ?");
+            params.add("%" + criteria.getDepartment().trim().toLowerCase() + "%");
+        }
+
+        if (criteria.getDegree() != null && !criteria.getDegree().isBlank()) {
+            sql.append(" AND LOWER(COALESCE(ap.degree, '')) LIKE ?");
+            params.add("%" + criteria.getDegree().trim().toLowerCase() + "%");
+        }
+
+        sql.append(" ORDER BY u.full_name ASC, u.id ASC");
+
+        List<Alumni> list = new ArrayList<>();
+        try (Connection conn = connectionSupplier.get();
+             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                Object p = params.get(i);
+                if (p instanceof Integer) {
+                    ps.setInt(i + 1, (Integer) p);
+                } else if (p instanceof Boolean) {
+                    ps.setBoolean(i + 1, (Boolean) p);
+                } else {
+                    ps.setString(i + 1, (String) p);
+                }
+            }
+
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     Alumni alumni = mapRowToAlumni(rs);

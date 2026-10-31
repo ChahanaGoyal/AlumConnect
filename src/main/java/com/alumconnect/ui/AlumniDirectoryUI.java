@@ -3,7 +3,9 @@ package com.alumconnect.ui;
 import com.alumconnect.model.Alumni;
 import com.alumconnect.service.AlumniDirectoryService;
 import com.alumconnect.service.dto.AlumniDirectoryResult;
+import com.alumconnect.service.dto.AlumniFilterCriteria;
 import com.alumconnect.util.UserSession;
+import com.alumconnect.util.ValidationUtil;
 
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -12,11 +14,18 @@ import java.util.Objects;
 import java.util.Scanner;
 
 /**
- * Console UI for the Alumni Directory and Alumni Search features (Prompt 12 &amp; Prompt 13).
+ * Console UI for the Alumni Directory, Alumni Search, and Alumni Filtering features
+ * (Prompt 12, Prompt 13 &amp; Prompt 14).
  *
- * <p>Allows an authenticated Student to browse a directory of registered alumni
- * and search for alumni using case-insensitive keywords (name, company, role, industry, skills).
- * Access by unauthorized users (unauthenticated, logged-out, or Alumni role) is
+ * <p>Allows an authenticated Student to:
+ * <ul>
+ *   <li>Browse the full directory of registered alumni</li>
+ *   <li>Search for alumni using keyword matching (name, company, role, industry, skills)</li>
+ *   <li>Filter alumni using structured criteria (graduation year, industry, experience,
+ *       mentorship availability, department, degree, and multi-filter combinations)</li>
+ * </ul>
+ *
+ * <p>Access by unauthorized users (unauthenticated, logged-out, or Alumni role) is
  * rejected with a security error.
  *
  * <p>Each alumni card presents:
@@ -61,6 +70,8 @@ public class AlumniDirectoryUI {
         this.out = Objects.requireNonNull(out, "out must not be null");
     }
 
+    // ── Directory (Prompt 12) ─────────────────────────────────────────────────
+
     /**
      * Displays the full Alumni Directory to the authenticated student.
      *
@@ -97,6 +108,8 @@ public class AlumniDirectoryUI {
         out.println("==================================================");
         out.println("[INFO] End of Alumni Directory.");
     }
+
+    // ── Search (Prompt 13) ────────────────────────────────────────────────────
 
     /**
      * Prompts the student to enter a search keyword and displays matching alumni (Prompt 13).
@@ -168,6 +181,318 @@ public class AlumniDirectoryUI {
         out.println("==================================================");
         out.println("[INFO] End of Alumni Search Results.");
     }
+
+    // ── Filtering (Prompt 14) ─────────────────────────────────────────────────
+
+    /**
+     * Displays the Alumni Filters menu, reads the student's choice, and dispatches to the
+     * appropriate filter handler (Prompt 14).
+     *
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void promptAndFilterAlumni() {
+        validateStudentSession();
+
+        out.println("\n==================================================");
+        out.println("                 ALUMNI FILTERS                   ");
+        out.println("==================================================");
+        out.println("  [1] Filter by Graduation Year");
+        out.println("  [2] Filter by Industry");
+        out.println("  [3] Filter by Experience");
+        out.println("  [4] Filter by Mentorship Availability");
+        out.println("  [5] Filter by Department");
+        out.println("  [6] Filter by Degree/Course");
+        out.println("  [7] Apply Multiple Filters");
+        out.println("  [0] Back");
+        out.println("--------------------------------------------------");
+        out.print("Enter your choice: ");
+
+        if (!scanner.hasNextLine()) {
+            return;
+        }
+
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "1" -> handleFilterByGraduationYear();
+            case "2" -> handleFilterByIndustry();
+            case "3" -> handleFilterByExperience();
+            case "4" -> handleFilterByMentorship();
+            case "5" -> handleFilterByDepartment();
+            case "6" -> handleFilterByDegree();
+            case "7" -> handleApplyMultipleFilters();
+            case "0" -> out.println("[AlumConnect] Returning to previous menu.");
+            default  -> out.println("[AlumConnect] Invalid choice '" + choice + "'. Please enter one of the listed options.");
+        }
+    }
+
+    /**
+     * Interactive filter alias.
+     *
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void filterAlumni() {
+        promptAndFilterAlumni();
+    }
+
+    /**
+     * Executes filtering for programmatic callers using the supplied {@link AlumniFilterCriteria}.
+     *
+     * @param criteria the filter criteria to apply
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void filterAlumni(AlumniFilterCriteria criteria) {
+        validateStudentSession();
+        displayFilteredResults(criteria);
+    }
+
+    // ── Filter Handlers ───────────────────────────────────────────────────────
+
+    private void handleFilterByGraduationYear() {
+        out.print("Enter graduation year: ");
+        if (!scanner.hasNextLine()) return;
+        String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            out.println("[ERROR] Graduation year cannot be empty.");
+            return;
+        }
+
+        int year;
+        try {
+            year = Integer.parseInt(input);
+        } catch (NumberFormatException e) {
+            out.println("[ERROR] Invalid graduation year. Please enter a valid number.");
+            return;
+        }
+
+        if (!ValidationUtil.isValidGraduationYear(year)) {
+            out.println("[ERROR] Graduation year must be between " +
+                    Alumni.MIN_GRAD_YEAR + " and " + Alumni.MAX_GRAD_YEAR + ".");
+            return;
+        }
+
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+        criteria.setGraduationYear(year);
+        displayFilteredResults(criteria);
+    }
+
+    private void handleFilterByIndustry() {
+        out.print("Enter industry: ");
+        if (!scanner.hasNextLine()) return;
+        String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            out.println("[ERROR] Industry filter cannot be empty.");
+            return;
+        }
+
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+        criteria.setIndustry(input);
+        displayFilteredResults(criteria);
+    }
+
+    private void handleFilterByExperience() {
+        out.print("Minimum years of experience: ");
+        if (!scanner.hasNextLine()) return;
+        String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            out.println("[ERROR] Experience cannot be empty.");
+            return;
+        }
+
+        int exp;
+        try {
+            exp = Integer.parseInt(input);
+        } catch (NumberFormatException e) {
+            out.println("[ERROR] Invalid experience. Please enter a valid non-negative number.");
+            return;
+        }
+
+        if (exp < 0) {
+            out.println("[ERROR] Years of experience cannot be negative.");
+            return;
+        }
+
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+        criteria.setMinExperience(exp);
+        displayFilteredResults(criteria);
+    }
+
+    private void handleFilterByMentorship() {
+        out.println("Mentorship Availability:");
+        out.println("  [1] Available for mentorship");
+        out.println("  [2] Not available for mentorship");
+        out.print("Select: ");
+        if (!scanner.hasNextLine()) return;
+        String input = scanner.nextLine().trim();
+
+        Boolean available;
+        if ("1".equals(input)) {
+            available = true;
+        } else if ("2".equals(input)) {
+            available = false;
+        } else {
+            out.println("[ERROR] Invalid choice for mentorship availability. Please select 1 or 2.");
+            return;
+        }
+
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+        criteria.setMentorshipAvailable(available);
+        displayFilteredResults(criteria);
+    }
+
+    private void handleFilterByDepartment() {
+        out.print("Enter department: ");
+        if (!scanner.hasNextLine()) return;
+        String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            out.println("[ERROR] Department cannot be empty.");
+            return;
+        }
+
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+        criteria.setDepartment(input);
+        displayFilteredResults(criteria);
+    }
+
+    private void handleFilterByDegree() {
+        out.print("Enter degree/course: ");
+        if (!scanner.hasNextLine()) return;
+        String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            out.println("[ERROR] Degree cannot be empty.");
+            return;
+        }
+
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+        criteria.setDegree(input);
+        displayFilteredResults(criteria);
+    }
+
+    private void handleApplyMultipleFilters() {
+        out.println("\n[AlumConnect] Configure Multiple Filters (press Enter to skip any filter):");
+        AlumniFilterCriteria criteria = new AlumniFilterCriteria();
+
+        // 1. Graduation year
+        out.print("Enter graduation year (or press Enter to skip): ");
+        if (scanner.hasNextLine()) {
+            String gradInput = scanner.nextLine().trim();
+            if (!gradInput.isEmpty()) {
+                try {
+                    int year = Integer.parseInt(gradInput);
+                    if (!ValidationUtil.isValidGraduationYear(year)) {
+                        out.println("[ERROR] Graduation year must be between " +
+                                Alumni.MIN_GRAD_YEAR + " and " + Alumni.MAX_GRAD_YEAR + ".");
+                        return;
+                    }
+                    criteria.setGraduationYear(year);
+                } catch (NumberFormatException e) {
+                    out.println("[ERROR] Invalid graduation year. Please enter a valid number.");
+                    return;
+                }
+            }
+        }
+
+        // 2. Industry
+        out.print("Enter industry (or press Enter to skip): ");
+        if (scanner.hasNextLine()) {
+            String indInput = scanner.nextLine().trim();
+            if (!indInput.isEmpty()) {
+                criteria.setIndustry(indInput);
+            }
+        }
+
+        // 3. Experience
+        out.print("Minimum years of experience (or press Enter to skip): ");
+        if (scanner.hasNextLine()) {
+            String expInput = scanner.nextLine().trim();
+            if (!expInput.isEmpty()) {
+                try {
+                    int exp = Integer.parseInt(expInput);
+                    if (exp < 0) {
+                        out.println("[ERROR] Years of experience cannot be negative.");
+                        return;
+                    }
+                    criteria.setMinExperience(exp);
+                } catch (NumberFormatException e) {
+                    out.println("[ERROR] Invalid experience. Please enter a valid non-negative number.");
+                    return;
+                }
+            }
+        }
+
+        // 4. Mentorship availability
+        out.print("Mentorship availability ([1] Available, [2] Not available, Enter to skip): ");
+        if (scanner.hasNextLine()) {
+            String mInput = scanner.nextLine().trim();
+            if ("1".equals(mInput)) {
+                criteria.setMentorshipAvailable(true);
+            } else if ("2".equals(mInput)) {
+                criteria.setMentorshipAvailable(false);
+            } else if (!mInput.isEmpty()) {
+                out.println("[ERROR] Invalid choice for mentorship availability. Please select 1 or 2.");
+                return;
+            }
+        }
+
+        // 5. Department
+        out.print("Enter department (or press Enter to skip): ");
+        if (scanner.hasNextLine()) {
+            String deptInput = scanner.nextLine().trim();
+            if (!deptInput.isEmpty()) {
+                criteria.setDepartment(deptInput);
+            }
+        }
+
+        // 6. Degree
+        out.print("Enter degree/course (or press Enter to skip): ");
+        if (scanner.hasNextLine()) {
+            String degInput = scanner.nextLine().trim();
+            if (!degInput.isEmpty()) {
+                criteria.setDegree(degInput);
+            }
+        }
+
+        displayFilteredResults(criteria);
+    }
+
+    /**
+     * Executes filtering for the given criteria and displays matching alumni cards or a friendly message.
+     */
+    private void displayFilteredResults(AlumniFilterCriteria criteria) {
+        out.println("\n==================================================");
+        out.println("                 FILTERED RESULTS                 ");
+        out.println("==================================================");
+
+        AlumniDirectoryResult result = directoryService.filterAlumni(criteria);
+        if (!result.isSuccess()) {
+            out.println("[ERROR] " + result.getMessage());
+            out.println("==================================================");
+            return;
+        }
+
+        List<Alumni> list = result.getAlumniList();
+        if (list.isEmpty()) {
+            out.println("No alumni found matching the selected filters.");
+            out.println("==================================================");
+            return;
+        }
+
+        out.println("Displaying " + list.size() + " matching alumni for selected filters:");
+        out.println("--------------------------------------------------");
+
+        for (int i = 0; i < list.size(); i++) {
+            printAlumniCard(i + 1, list.get(i));
+        }
+
+        out.println("==================================================");
+        out.println("[INFO] End of Filtered Alumni Results.");
+    }
+
+    // ── Session Validation & Display Helpers ──────────────────────────────────
 
     /**
      * Validates that the active session belongs to an authenticated student.

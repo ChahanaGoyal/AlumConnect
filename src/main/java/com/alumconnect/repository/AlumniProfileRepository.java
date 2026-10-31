@@ -1,6 +1,7 @@
 package com.alumconnect.repository;
 
 import com.alumconnect.model.Alumni;
+import com.alumconnect.service.dto.AlumniFilterCriteria;
 
 import java.sql.SQLException;
 import java.util.Collections;
@@ -11,7 +12,8 @@ import java.util.Optional;
  * Data Access interface for alumni profile persistence operations.
  *
  * <p>Handles reading, updating, and creating records in the {@code alumni_profiles}
- * table for an authenticated alumni user, as well as directory retrieval and search of all alumni.
+ * table for an authenticated alumni user, as well as directory retrieval, search, and
+ * structured filtering of all alumni.
  */
 public interface AlumniProfileRepository {
 
@@ -89,6 +91,23 @@ public interface AlumniProfileRepository {
                         || (a.getIndustry() != null && a.getIndustry().toLowerCase().contains(lower))
                         || (a.getExpertiseAreas() != null && a.getExpertiseAreas().toLowerCase().contains(lower))
                         || (a.getDepartment() != null && a.getDepartment().toLowerCase().contains(lower)))
+                .toList();
+    }
+
+    /**
+     * Filters registered active alumni records matching the provided criteria (Prompt 14).
+     * All provided non-null criteria are combined with AND logic.
+     *
+     * @param criteria the filter criteria
+     * @return list of matching Alumni profiles; empty list if no alumni match
+     * @throws SQLException if a database error occurs
+     */
+    default List<Alumni> filterAlumni(AlumniFilterCriteria criteria) throws SQLException {
+        if (criteria == null || !criteria.hasAnyFilter()) {
+            return findAllAlumni();
+        }
+        return findAllAlumni().stream()
+                .filter(criteria::matches)
                 .toList();
     }
 }

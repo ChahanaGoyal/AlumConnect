@@ -13,7 +13,7 @@ import java.io.PrintStream;
 import java.util.Scanner;
 
 /**
- * Console UI for the Student Dashboard (Prompt 10, Prompt 12 &amp; Prompt 13).
+ * Console UI for the Student Dashboard (Prompt 10, Prompt 12, Prompt 13 &amp; Prompt 14).
  *
  * <p>Displays a role-gated menu to an authenticated Student and routes input
  * to the appropriate sub-feature UIs. The dashboard can only be entered by a
@@ -29,6 +29,7 @@ import java.util.Scanner;
  *   <li>My Profile: view, create, edit student profile</li>
  *   <li>Browse Alumni: explore registered alumni directory (Prompt 12)</li>
  *   <li>Search Alumni: search alumni by name, company, role, industry, skills (Prompt 13)</li>
+ *   <li>Filter Alumni: filter alumni by structured criteria (Prompt 14)</li>
  *   <li>Logout</li>
  *   <li>Exit</li>
  * </ol>
@@ -47,6 +48,8 @@ public class StudentDashboardUI {
     public static final String OPTION_BROWSE_ALUMNI = "2";
     /** Menu option: search alumni directory. */
     public static final String OPTION_SEARCH_ALUMNI = "3";
+    /** Menu option: filter alumni directory using structured criteria. */
+    public static final String OPTION_FILTER_ALUMNI = "4";
     /** Menu option: log the student out. */
     public static final String OPTION_LOGOUT        = "9";
     /** Menu option: exit the application. */
@@ -211,6 +214,7 @@ public class StudentDashboardUI {
         out.println("  [" + OPTION_PROFILE       + "] My Profile");
         out.println("  [" + OPTION_BROWSE_ALUMNI + "] Browse Alumni");
         out.println("  [" + OPTION_SEARCH_ALUMNI + "] Search Alumni");
+        out.println("  [" + OPTION_FILTER_ALUMNI + "] Filter Alumni");
         out.println("  [" + OPTION_LOGOUT        + "] Logout");
         out.println("  [" + OPTION_EXIT          + "] Exit");
         out.println("--------------------------------------------------");
@@ -237,6 +241,7 @@ public class StudentDashboardUI {
             case OPTION_PROFILE       -> handleProfileSubMenu();
             case OPTION_BROWSE_ALUMNI -> handleBrowseAlumni();
             case OPTION_SEARCH_ALUMNI -> handleSearchAlumni();
+            case OPTION_FILTER_ALUMNI -> handleFilterAlumni();
             case OPTION_LOGOUT        -> handleLogout();
             case OPTION_EXIT          -> {
                 out.println("\n[AlumConnect] Goodbye! Thank you for using AlumConnect.");
@@ -269,6 +274,21 @@ public class StudentDashboardUI {
     public void handleSearchAlumni() {
         try {
             alumniDirectoryUI.promptAndSearchAlumni();
+        } catch (SecurityException e) {
+            out.println("[AlumConnect] Access denied: " + e.getMessage());
+        } catch (Exception e) {
+            out.println("[AlumConnect] An unexpected error occurred: " + e.getMessage());
+        }
+    }
+
+    // ── Filter Alumni (Prompt 14) ─────────────────────────────────────────────
+
+    /**
+     * Opens the Alumni Filter prompt for the student to narrow down alumni by structured criteria.
+     */
+    public void handleFilterAlumni() {
+        try {
+            alumniDirectoryUI.promptAndFilterAlumni();
         } catch (SecurityException e) {
             out.println("[AlumConnect] Access denied: " + e.getMessage());
         } catch (Exception e) {

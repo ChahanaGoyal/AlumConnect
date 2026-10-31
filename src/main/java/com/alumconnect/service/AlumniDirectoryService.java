@@ -16,12 +16,14 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Service providing Alumni Directory browsing, searching, and structured filtering
- * functionality for authenticated students (Prompt 12, Prompt 13 &amp; Prompt 14).
+ * Service providing Alumni Directory browsing, searching, structured filtering,
+ * and individual alumni profile viewing for authenticated students
+ * (Prompt 12, Prompt 13, Prompt 14 &amp; Prompt 15).
  *
  * <p>Enforces the following security invariants:
  * <ul>
- *   <li>Only authenticated students (role = {@link Role#STUDENT}) may view, search, or filter the alumni directory.</li>
+ *   <li>Only authenticated students (role = {@link Role#STUDENT}) may view, search, filter,
+ *       or view individual profiles in the alumni directory.</li>
  *   <li>Alumni, admin, unauthenticated, and logged-out users are denied access.</li>
  * </ul>
  *
@@ -187,6 +189,56 @@ public class AlumniDirectoryService {
         } catch (Exception e) {
             return AlumniDirectoryResult.failure(
                     "Unexpected error while filtering alumni: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Retrieves the public profile of a specific alumni by their user ID (Prompt 15).
+     *
+     * <p>Only authenticated students may invoke this method. The returned profile
+     * contains all public fields including bio, LinkedIn URL, and mentorship details,
+     * but never exposes password hashes, salts, or session information.
+     *
+     * @param alumniId the {@code users.id} primary key of the target alumni
+     * @return {@link AlumniDirectoryResult} carrying a single-element list on success,
+     *         or an error message on failure/not-found
+     */
+    public AlumniDirectoryResult viewAlumniProfile(int alumniId) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return AlumniDirectoryResult.failure(
+                    "Access denied: You must be logged in to view an alumni profile.");
+        }
+
+        // 2. Role check — only students may view alumni profiles via the directory
+        User user = sessionUser.get();
+        if (user.getRole() != Role.STUDENT) {
+            return AlumniDirectoryResult.failure(
+                    "Access denied: Only students can view alumni profiles.");
+        }
+
+        // 3. Validate ID
+        if (alumniId <= 0) {
+            return AlumniDirectoryResult.failure(
+                    "Invalid alumni ID: ID must be a positive integer.");
+        }
+
+        // 4. Database lookup
+        try {
+            Optional<Alumni> alumni = profileRepository.findPublicProfileByUserId(alumniId);
+            if (alumni.isEmpty()) {
+                return AlumniDirectoryResult.failure(
+                        "Alumni profile not found for ID: " + alumniId);
+            }
+            return AlumniDirectoryResult.success(
+                    "Alumni profile retrieved successfully.", List.of(alumni.get()));
+        } catch (SQLException e) {
+            return AlumniDirectoryResult.failure(
+                    "Database error while retrieving alumni profile: " + e.getMessage());
+        } catch (Exception e) {
+            return AlumniDirectoryResult.failure(
+                    "Unexpected error while retrieving alumni profile: " + e.getMessage());
         }
     }
 }

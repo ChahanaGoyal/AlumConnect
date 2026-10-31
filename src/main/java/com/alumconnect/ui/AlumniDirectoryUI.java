@@ -14,8 +14,8 @@ import java.util.Objects;
 import java.util.Scanner;
 
 /**
- * Console UI for the Alumni Directory, Alumni Search, and Alumni Filtering features
- * (Prompt 12, Prompt 13 &amp; Prompt 14).
+ * Console UI for the Alumni Directory, Alumni Search, Alumni Filtering, and
+ * individual Alumni Profile Viewing features (Prompt 12, 13, 14 &amp; 15).
  *
  * <p>Allows an authenticated Student to:
  * <ul>
@@ -23,6 +23,7 @@ import java.util.Scanner;
  *   <li>Search for alumni using keyword matching (name, company, role, industry, skills)</li>
  *   <li>Filter alumni using structured criteria (graduation year, industry, experience,
  *       mentorship availability, department, degree, and multi-filter combinations)</li>
+ *   <li>View the detailed public profile of a selected alumni</li>
  * </ul>
  *
  * <p>Access by unauthorized users (unauthenticated, logged-out, or Alumni role) is
@@ -40,6 +41,13 @@ import java.util.Scanner;
  *   <li>Years of Experience</li>
  *   <li>Expertise / Skills</li>
  *   <li>Mentorship Availability</li>
+ * </ul>
+ *
+ * <p>The detailed profile view additionally shows:
+ * <ul>
+ *   <li>Bio</li>
+ *   <li>LinkedIn Profile URL</li>
+ *   <li>Maximum Mentees (when mentorship is available)</li>
  * </ul>
  */
 public class AlumniDirectoryUI {
@@ -73,7 +81,8 @@ public class AlumniDirectoryUI {
     // ── Directory (Prompt 12) ─────────────────────────────────────────────────
 
     /**
-     * Displays the full Alumni Directory to the authenticated student.
+     * Displays the full Alumni Directory to the authenticated student, then offers
+     * an option to view any listed alumni's detailed profile (Prompt 15).
      *
      * @throws SecurityException if the active session is unauthenticated or not a Student
      */
@@ -107,6 +116,8 @@ public class AlumniDirectoryUI {
 
         out.println("==================================================");
         out.println("[INFO] End of Alumni Directory.");
+
+        promptViewAlumniFromList(alumniList);
     }
 
     // ── Search (Prompt 13) ────────────────────────────────────────────────────
@@ -142,7 +153,8 @@ public class AlumniDirectoryUI {
     }
 
     /**
-     * Executes a search for the given keyword and prints the matching alumni cards (Prompt 13).
+     * Executes a search for the given keyword, prints matching alumni cards, then offers
+     * an option to view any listed alumni's detailed profile (Prompt 13 &amp; 15).
      *
      * @param keyword search keyword (case-insensitive)
      * @throws SecurityException if the active session is unauthenticated or not a Student
@@ -180,6 +192,8 @@ public class AlumniDirectoryUI {
 
         out.println("==================================================");
         out.println("[INFO] End of Alumni Search Results.");
+
+        promptViewAlumniFromList(alumniList);
     }
 
     // ── Filtering (Prompt 14) ─────────────────────────────────────────────────
@@ -461,6 +475,7 @@ public class AlumniDirectoryUI {
 
     /**
      * Executes filtering for the given criteria and displays matching alumni cards or a friendly message.
+     * After listing results, offers an option to view any alumni's detailed profile (Prompt 15).
      */
     private void displayFilteredResults(AlumniFilterCriteria criteria) {
         out.println("\n==================================================");
@@ -490,6 +505,117 @@ public class AlumniDirectoryUI {
 
         out.println("==================================================");
         out.println("[INFO] End of Filtered Alumni Results.");
+
+        promptViewAlumniFromList(list);
+    }
+
+    // ── Profile Viewing (Prompt 15) ───────────────────────────────────────────
+
+    /**
+     * Fetches and displays the detailed public profile of a specific alumni by their user ID.
+     *
+     * <p>Displays all public fields including Bio, LinkedIn URL, and mentorship details.
+     * Never exposes password hashes, salts, or session information.
+     *
+     * @param alumniId the {@code users.id} PK of the target alumni
+     * @throws SecurityException if the active session is unauthenticated or not a Student
+     */
+    public void viewAlumniProfile(int alumniId) {
+        validateStudentSession();
+
+        AlumniDirectoryResult result = directoryService.viewAlumniProfile(alumniId);
+        if (!result.isSuccess()) {
+            out.println("[ERROR] " + result.getMessage());
+            return;
+        }
+
+        List<Alumni> list = result.getAlumniList();
+        if (list.isEmpty()) {
+            out.println("[AlumConnect] Alumni profile not found.");
+            return;
+        }
+
+        printDetailedAlumniProfile(list.get(0));
+    }
+
+    /**
+     * After listing an alumni result set, prompts the student to choose a number to view
+     * a detailed profile, or 0 to return to the previous menu.
+     *
+     * @param alumniList the list of alumni currently on screen (1-based selection)
+     */
+    private void promptViewAlumniFromList(List<Alumni> alumniList) {
+        if (alumniList == null || alumniList.isEmpty()) {
+            return;
+        }
+
+        out.println("\nEnter the number to view an alumni's profile, or 0 to go back: ");
+        if (!scanner.hasNextLine()) {
+            return;
+        }
+
+        String input = scanner.nextLine().trim();
+        if ("0".equals(input)) {
+            out.println("[AlumConnect] Returning to previous menu.");
+            return;
+        }
+
+        int index;
+        try {
+            index = Integer.parseInt(input);
+        } catch (NumberFormatException e) {
+            out.println("[AlumConnect] Invalid input. Please enter a number.");
+            return;
+        }
+
+        if (index < 1 || index > alumniList.size()) {
+            out.println("[AlumConnect] Invalid selection. Please enter a number between 1 and " + alumniList.size() + ".");
+            return;
+        }
+
+        // Use the alumni's user ID (getId()) for the service lookup
+        Alumni selected = alumniList.get(index - 1);
+        if (selected.getId() == null || selected.getId() <= 0) {
+            out.println("[AlumConnect] Cannot view profile: alumni ID is missing.");
+            return;
+        }
+
+        viewAlumniProfile(selected.getId());
+    }
+
+    /**
+     * Prints the full detailed profile of an alumni, including all public fields
+     * (Bio, LinkedIn, mentorship details) not shown in the compact card.
+     *
+     * @param a the Alumni instance
+     */
+    private void printDetailedAlumniProfile(Alumni a) {
+        String gradYearStr = a.getGraduationYear() > 0 ? String.valueOf(a.getGraduationYear()) : "Not Specified";
+        String expStr = (a.getProfileId() != null && a.getYearsOfExperience() >= 0)
+                ? a.getYearsOfExperience() + " years"
+                : "Not Specified";
+        String mentorshipStr = a.isAvailableForMentorship() ? "Yes" : "No";
+        String maxMenteesStr = a.isAvailableForMentorship() && a.getMaxMentees() > 0
+                ? String.valueOf(a.getMaxMentees())
+                : "N/A";
+
+        out.println("\n==================================================");
+        out.println("               ALUMNI PROFILE DETAILS             ");
+        out.println("==================================================");
+        out.println("  Full Name            : " + safeString(a.getFullName()));
+        out.println("  Graduation Year      : " + gradYearStr);
+        out.println("  Degree               : " + safeString(a.getDegree()));
+        out.println("  Department           : " + safeString(a.getDepartment()));
+        out.println("  Current Company      : " + safeString(a.getCurrentCompany()));
+        out.println("  Current Role         : " + safeString(a.getCurrentRole()));
+        out.println("  Industry             : " + safeString(a.getIndustry()));
+        out.println("  Experience           : " + expStr);
+        out.println("  Skills / Expertise   : " + safeString(a.getExpertiseAreas()));
+        out.println("  Bio                  : " + safeString(a.getBio()));
+        out.println("  LinkedIn             : " + safeString(a.getLinkedinUrl()));
+        out.println("  Mentorship Available : " + mentorshipStr);
+        out.println("  Max Mentees          : " + maxMenteesStr);
+        out.println("==================================================");
     }
 
     // ── Session Validation & Display Helpers ──────────────────────────────────

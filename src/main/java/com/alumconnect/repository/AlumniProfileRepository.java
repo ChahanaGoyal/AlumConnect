@@ -12,8 +12,8 @@ import java.util.Optional;
  * Data Access interface for alumni profile persistence operations.
  *
  * <p>Handles reading, updating, and creating records in the {@code alumni_profiles}
- * table for an authenticated alumni user, as well as directory retrieval, search, and
- * structured filtering of all alumni.
+ * table for an authenticated alumni user, as well as directory retrieval, search,
+ * structured filtering, and public profile viewing of all alumni.
  */
 public interface AlumniProfileRepository {
 
@@ -109,5 +109,17 @@ public interface AlumniProfileRepository {
         return findAllAlumni().stream()
                 .filter(criteria::matches)
                 .toList();
+    }
+
+    /**
+     * Finds an alumni by their user ID, including their profile details if created.
+     * Used for public alumni directory viewing (Prompt 15).
+     *
+     * @param userId the user ID of the alumni
+     * @return Optional containing Alumni if found and active
+     * @throws SQLException if a database error occurs
+     */
+    default Optional<Alumni> findPublicProfileByUserId(int userId) throws SQLException {
+        return findProfileByUserId(userId);
     }
 }

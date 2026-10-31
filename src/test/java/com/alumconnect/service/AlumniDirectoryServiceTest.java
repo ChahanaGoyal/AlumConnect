@@ -22,9 +22,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link AlumniDirectoryService} — Prompt 12 &amp; Prompt 13.
+ * Unit tests for {@link AlumniDirectoryService} — Prompt 12, Prompt 13, Prompt 14 &amp; Prompt 15.
  */
-@DisplayName("Alumni Directory & Search Service Tests (Prompt 12 & 13)")
+@DisplayName("Alumni Directory, Search, Filter & Profile Viewing Service Tests (Prompt 12–15)")
 class AlumniDirectoryServiceTest {
 
     private FakeAlumniProfileRepository fakeRepository;
@@ -336,8 +336,93 @@ class AlumniDirectoryServiceTest {
         assertTrue(result.getMessage().toLowerCase().contains("database error"));
     }
 
-    // ── In-Memory Fake Repository ─────────────────────────────────────────────
+    // ── View Alumni Profile tests (Prompt 15) ────────────────────────────────
 
+    @Test
+    @DisplayName("Authenticated student can view a specific alumni profile by ID")
+    void testStudentCanViewAlumniProfile() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.addAlumni(testAlumni); // id = 2
+
+        AlumniDirectoryResult result = directoryService.viewAlumniProfile(2);
+
+        assertTrue(result.isSuccess(), "Profile viewing should succeed for student");
+        assertEquals(1, result.getAlumniList().size());
+        Alumni retrieved = result.getAlumniList().get(0);
+        assertEquals("Priya Verma", retrieved.getFullName());
+        assertEquals("Microsoft", retrieved.getCurrentCompany());
+        assertEquals("Staff Engineer", retrieved.getCurrentRole());
+        assertEquals("Software", retrieved.getIndustry());
+        assertEquals(4, retrieved.getYearsOfExperience());
+        assertEquals("Cloud Architecture, Java", retrieved.getExpertiseAreas());
+    }
+
+    @Test
+    @DisplayName("Unauthenticated user cannot view alumni profile")
+    void testViewAlumniProfileUnauthenticatedRejected() {
+        // No login
+        AlumniDirectoryResult result = directoryService.viewAlumniProfile(2);
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("logged in"));
+        assertTrue(result.getAlumniList().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Alumni role user cannot view alumni profile via student flow")
+    void testViewAlumniProfileAlumniRoleRejected() {
+        UserSession.getInstance().login(testAlumni);
+
+        AlumniDirectoryResult result = directoryService.viewAlumniProfile(2);
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("only students") ||
+                   result.getMessage().toLowerCase().contains("access denied"));
+        assertTrue(result.getAlumniList().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Invalid alumni ID (zero or negative) returns failure")
+    void testViewAlumniProfileInvalidIdRejected() {
+        UserSession.getInstance().login(testStudent);
+
+        AlumniDirectoryResult zeroResult = directoryService.viewAlumniProfile(0);
+        assertFalse(zeroResult.isSuccess());
+        assertTrue(zeroResult.getMessage().toLowerCase().contains("invalid alumni id") ||
+                   zeroResult.getMessage().toLowerCase().contains("positive"));
+
+        AlumniDirectoryResult negResult = directoryService.viewAlumniProfile(-5);
+        assertFalse(negResult.isSuccess());
+    }
+
+    @Test
+    @DisplayName("Alumni ID not found in repository returns failure")
+    void testViewAlumniProfileNotFound() {
+        UserSession.getInstance().login(testStudent);
+        // Repository is empty — no alumni with ID 999
+
+        AlumniDirectoryResult result = directoryService.viewAlumniProfile(999);
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("not found") ||
+                   result.getMessage().contains("999"));
+        assertTrue(result.getAlumniList().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Database SQLException is handled gracefully when viewing alumni profile")
+    void testViewAlumniProfileDatabaseErrorHandled() {
+        UserSession.getInstance().login(testStudent);
+        fakeRepository.setThrowSqlException(true);
+
+        AlumniDirectoryResult result = directoryService.viewAlumniProfile(2);
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().toLowerCase().contains("database error"));
+        assertTrue(result.getAlumniList().isEmpty());
+    }
+
+    // ── In-Memory Fake Repository ─────────────────────────────────────────────
     private static class FakeAlumniProfileRepository implements AlumniProfileRepository {
         private final List<Alumni> alumniList = new ArrayList<>();
         private boolean throwSqlException = false;
@@ -367,11 +452,12 @@ class AlumniDirectoryServiceTest {
         }
 
         @Override
-        public Optional<Alumni> findProfileByUserId(int userId) {
+        public Optional<Alumni> findProfileByUserId(int userId) throws SQLException {
+            if (throwSqlException) {
+                throw new SQLException("Connection to MySQL lost");
+            }
             return alumniList.stream().filter(a -> a.getId().equals(userId)).findFirst();
-        }
-
-        @Override
+        }        @Override
         public boolean updateProfile(Alumni alumni) {
             return true;
         }

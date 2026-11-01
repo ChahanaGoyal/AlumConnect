@@ -214,6 +214,37 @@ class AlumniProfileUITest {
         assertTrue(out.toString(StandardCharsets.UTF_8).contains("Graduation year must be a number"));
     }
 
+    @Test
+    @DisplayName("displayAlumniProfile displays profile and prompts student for mentorship request")
+    void testDisplayAlumniProfileStudentFlow() {
+        Student student = new Student();
+        student.setId(1);
+        student.setRole(Role.STUDENT);
+        UserSession.getInstance().login(student);
+
+        String input = "1\nSystem Design\nPlease mentor me on distributed systems.\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AlumniProfileUI ui = new AlumniProfileUI(profileService, in, new PrintStream(out));
+        ui.displayAlumniProfile(testAlumni);
+
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("ALUMNI PROFILE"));
+        assertTrue(output.contains("Vikram Malhotra"));
+        assertTrue(output.contains("Send Mentorship Request"));
+    }
+
+    @Test
+    @DisplayName("displayAlumniProfile handles null alumni")
+    void testDisplayAlumniProfileNull() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        AlumniProfileUI ui = new AlumniProfileUI(profileService, new ByteArrayInputStream(new byte[0]), new PrintStream(out));
+        ui.displayAlumniProfile(null);
+
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("[ERROR] Alumni profile not found."));
+    }
+
     // ── In-Memory Repo ────────────────────────────────────────────────────────
 
     private static class InMemoryAlumniProfileRepo implements AlumniProfileRepository {

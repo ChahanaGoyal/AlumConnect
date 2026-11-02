@@ -2,15 +2,18 @@ package com.alumconnect.ui;
 
 import com.alumconnect.model.Alumni;
 import com.alumconnect.service.AlumniProfileService;
+import com.alumconnect.service.MentorshipRequestService;
 import com.alumconnect.service.dto.AlumniProfileRequest;
 import com.alumconnect.service.dto.AlumniProfileResult;
+import com.alumconnect.service.dto.MentorshipRequestResult;
+import com.alumconnect.util.UserSession;
 
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.Scanner;
 
 /**
- * Console UI for the Alumni Profile feature (Prompt 8).
+ * Console UI for the Alumni Profile feature (Prompt 8 &amp; Prompt 16).
  *
  * <p>Lets a logged-in alumni:
  * <ol>
@@ -19,40 +22,53 @@ import java.util.Scanner;
  *   <li>Create a profile if none exists yet.</li>
  * </ol>
  *
- * <p>All access-control decisions are delegated to {@link AlumniProfileService};
- * this class only handles I/O presentation.
+ * <p>Lets a student viewing an alumni profile:
+ * <ol>
+ *   <li>View the complete alumni profile.</li>
+ *   <li>Send a mentorship request (Prompt 16).</li>
+ * </ol>
+ *
+ * <p>All access-control decisions are delegated to {@link AlumniProfileService}
+ * and {@link MentorshipRequestService}; this class only handles I/O presentation.
  */
 public class AlumniProfileUI {
 
     private final AlumniProfileService profileService;
+    private final MentorshipRequestService mentorshipRequestService;
     private final Scanner scanner;
     private final PrintStream out;
 
     public AlumniProfileUI() {
-        this(new AlumniProfileService(), new Scanner(System.in), System.out);
+        this(new AlumniProfileService(), new MentorshipRequestService(), new Scanner(System.in), System.out);
     }
 
     public AlumniProfileUI(AlumniProfileService profileService) {
-        this(profileService, new Scanner(System.in), System.out);
+        this(profileService, new MentorshipRequestService(), new Scanner(System.in), System.out);
     }
 
     public AlumniProfileUI(AlumniProfileService profileService,
                            InputStream in,
                            PrintStream out) {
-        this.profileService = profileService;
-        this.scanner = new Scanner(in);
-        this.out = out;
+        this(profileService, new MentorshipRequestService(), new Scanner(in), out);
     }
 
     public AlumniProfileUI(AlumniProfileService profileService,
                            Scanner scanner,
                            PrintStream out) {
+        this(profileService, new MentorshipRequestService(), scanner, out);
+    }
+
+    public AlumniProfileUI(AlumniProfileService profileService,
+                           MentorshipRequestService mentorshipRequestService,
+                           Scanner scanner,
+                           PrintStream out) {
         this.profileService = profileService;
+        this.mentorshipRequestService = mentorshipRequestService;
         this.scanner = scanner;
         this.out = out;
     }
 
-    // ── View Profile ──────────────────────────────────────────────────────────
+    // ── View Profile (Alumni Self) ────────────────────────────────────────────
 
     /**
      * Displays the current alumni's profile.
@@ -69,6 +85,96 @@ public class AlumniProfileUI {
         }
 
         return result;
+    }
+
+    // ── View Profile & Mentorship (Student Flow) ──────────────────────────────
+
+    /**
+     * Displays an alumni's profile to a student and provides an option to send
+     * a mentorship request (Prompt 16).
+     *
+     * @param alumni the target alumni
+     */
+    public void displayAlumniProfile(Alumni alumni) {
+        if (alumni == null) {
+            out.println("\n[ERROR] Alumni profile not found.");
+            return;
+        }
+
+        out.println("\n==================================================");
+        out.println("                 ALUMNI PROFILE                   ");
+        out.println("==================================================");
+        out.println("  Full Name       : " + alumni.getFullName());
+        out.println("  Email           : " + alumni.getEmail());
+        if (alumni.getPhone() != null) {
+            out.println("  Phone           : " + alumni.getPhone());
+        }
+        out.println("--------------------------------------------------");
+        out.println("  Degree          : " + alumni.getDegree());
+        out.println("  Department      : " + alumni.getDepartment());
+        out.println("  Graduation Year : " + alumni.getGraduationYear());
+        if (alumni.getCurrentCompany() != null) {
+            out.println("  Current Company : " + alumni.getCurrentCompany());
+        }
+        if (alumni.getCurrentRole() != null) {
+            out.println("  Current Role    : " + alumni.getCurrentRole());
+        }
+        if (alumni.getIndustry() != null) {
+            out.println("  Industry        : " + alumni.getIndustry());
+        }
+        out.println("  Experience      : " + alumni.getYearsOfExperience() + " years");
+        if (alumni.getExpertiseAreas() != null) {
+            out.println("  Expertise Areas : " + alumni.getExpertiseAreas());
+        }
+        out.println("--------------------------------------------------");
+        out.println("  Mentorship      : " + (alumni.isAvailableForMentorship() ? "Available" : "Not Available"));
+        out.println("  Max Mentees     : " + alumni.getMaxMentees());
+        if (alumni.getBio() != null) {
+            out.println("  Bio             : " + alumni.getBio());
+        }
+        if (alumni.getLinkedinUrl() != null) {
+            out.println("  LinkedIn        : " + alumni.getLinkedinUrl());
+        }
+        out.println("==================================================");
+
+        if (UserSession.getInstance().isStudent()) {
+            promptSendMentorshipRequest(alumni.getId());
+        }
+    }
+
+    /**
+     * Prompts the student to send a mentorship request to the target alumni.
+     *
+     * @param alumniId the target alumni's user ID
+     */
+    public void promptSendMentorshipRequest(int alumniId) {
+        out.println("\nMentorship Options:");
+        out.println("  [1] Send Mentorship Request");
+        out.println("  [0] Back");
+        out.print("Select: ");
+
+        if (!scanner.hasNextLine()) {
+            return;
+        }
+
+        String choice = scanner.nextLine().trim();
+        if ("1".equals(choice) || "y".equalsIgnoreCase(choice) || "yes".equalsIgnoreCase(choice)) {
+            out.print("Enter Mentorship Topic: ");
+            if (!scanner.hasNextLine()) return;
+            String topic = scanner.nextLine().trim();
+
+            out.print("Enter Mentorship Message: ");
+            if (!scanner.hasNextLine()) return;
+            String message = scanner.nextLine().trim();
+
+            MentorshipRequestResult result = mentorshipRequestService.sendRequest(alumniId, topic, message);
+
+            if (result.isSuccess()) {
+                out.println("\n[SUCCESS] " + result.getMessage());
+            } else {
+                out.println("\n[ERROR] " + result.getMessage());
+            }
+        }
     }
 
     // ── Edit Profile ──────────────────────────────────────────────────────────

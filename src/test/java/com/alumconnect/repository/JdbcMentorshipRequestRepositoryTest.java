@@ -170,4 +170,40 @@ class JdbcMentorshipRequestRepositoryTest {
         assertEquals(MentorshipStatus.ACCEPTED, foundOpt.get().getStatus());
         assertNotNull(foundOpt.get().getRespondedAt());
     }
+
+    @Test
+    @DisplayName("Find requests by student ID with alumni info (Prompt 18)")
+    void testFindRequestsByStudentId() throws SQLException {
+        assumeTrue(dbAvailable, "Database must be available for integration test");
+
+        Student student = new Student("test.std4." + System.currentTimeMillis() + "@thapar.edu",
+                "hashedPass1", "Student Four", null, "CS", 2026);
+        student.setRole(Role.STUDENT);
+        userRepo.saveStudent(student);
+        createdUserIds.add(student.getId());
+
+        Alumni alumni = new Alumni("test.alm4." + System.currentTimeMillis() + "@thapar.edu",
+                "hashedPass2", "Alumni Four", null, "CS", 2017);
+        alumni.setRole(Role.ALUMNI);
+        alumni.setCurrentCompany("Amazon");
+        alumni.setCurrentRole("Principal SDE");
+        userRepo.saveAlumni(alumni);
+        createdUserIds.add(alumni.getId());
+
+        MentorshipRequestDto dto = new MentorshipRequestDto(student.getId(), alumni.getId(),
+                "Prompt 18 Topic", "Prompt 18 Message");
+        int reqId = requestRepo.createRequest(dto);
+        assertTrue(reqId > 0);
+        createdRequestIds.add(reqId);
+
+        List<MentorshipRequest> studentRequests = requestRepo.findRequestsByStudentId(student.getId());
+        assertFalse(studentRequests.isEmpty());
+        assertTrue(studentRequests.stream().anyMatch(r -> r.getId() == reqId));
+
+        MentorshipRequest req = studentRequests.stream().filter(r -> r.getId() == reqId).findFirst().orElseThrow();
+        assertEquals("Prompt 18 Topic", req.getTopic());
+        assertEquals("Alumni Four", req.getAlumniName());
+        assertEquals(alumni.getEmail(), req.getAlumniEmail());
+        assertEquals(MentorshipStatus.PENDING, req.getStatus());
+    }
 }

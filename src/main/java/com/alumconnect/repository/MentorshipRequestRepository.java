@@ -52,6 +52,18 @@ public interface MentorshipRequestRepository {
     }
 
     /**
+     * Retrieves all mentorship requests sent by the specified student,
+     * joined with alumni and alumni_profiles details.
+     *
+     * @param studentId the student user ID
+     * @return list of MentorshipRequest objects
+     * @throws SQLException on database error
+     */
+    default List<MentorshipRequest> findRequestsByStudentId(int studentId) throws SQLException {
+        return Collections.emptyList();
+    }
+
+    /**
      * Finds a single mentorship request by its primary key ID.
      *
      * @param requestId the mentorship request ID
@@ -78,6 +90,10 @@ public interface MentorshipRequestRepository {
     // Default aliases for flexibility
     default List<MentorshipRequest> findByAlumniId(int alumniId) throws SQLException {
         return findRequestsByAlumniId(alumniId);
+    }
+
+    default List<MentorshipRequest> findByStudentId(int studentId) throws SQLException {
+        return findRequestsByStudentId(studentId);
     }
 
     default Optional<MentorshipRequest> findById(int requestId) throws SQLException {

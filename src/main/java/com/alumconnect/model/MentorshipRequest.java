@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Model representing a row in the {@code mentorship_requests} table.
  * Mirrors the database schema defined in schema.sql, and optionally holds
- * associated student information populated via table joins.
+ * associated student or alumni information populated via table joins.
  */
 public class MentorshipRequest {
     private Integer id; // AUTO_INCREMENT primary key
@@ -21,12 +21,20 @@ public class MentorshipRequest {
     private LocalDateTime completedAt;
     private LocalDateTime updatedAt;
 
-    // Associated student information (populated on retrieval with user/profile join)
+    // Associated student information (populated on retrieval with user/profile join for alumni view)
     private String studentName;
     private String studentEmail;
     private String studentDegree;
     private String studentDepartment;
     private Integer studentGraduationYear;
+
+    // Associated alumni information (populated on retrieval with user/profile join for student view)
+    private String alumniName;
+    private String alumniEmail;
+    private String alumniDegree;
+    private String alumniDepartment;
+    private String alumniCompany;
+    private String alumniRole;
 
     public MentorshipRequest() {
         // Required for JDBC mapping
@@ -89,4 +97,22 @@ public class MentorshipRequest {
 
     public Integer getStudentGraduationYear() { return studentGraduationYear; }
     public void setStudentGraduationYear(Integer studentGraduationYear) { this.studentGraduationYear = studentGraduationYear; }
+
+    public String getAlumniName() { return alumniName; }
+    public void setAlumniName(String alumniName) { this.alumniName = alumniName; }
+
+    public String getAlumniEmail() { return alumniEmail; }
+    public void setAlumniEmail(String alumniEmail) { this.alumniEmail = alumniEmail; }
+
+    public String getAlumniDegree() { return alumniDegree; }
+    public void setAlumniDegree(String alumniDegree) { this.alumniDegree = alumniDegree; }
+
+    public String getAlumniDepartment() { return alumniDepartment; }
+    public void setAlumniDepartment(String alumniDepartment) { this.alumniDepartment = alumniDepartment; }
+
+    public String getAlumniCompany() { return alumniCompany; }
+    public void setAlumniCompany(String alumniCompany) { this.alumniCompany = alumniCompany; }
+
+    public String getAlumniRole() { return alumniRole; }
+    public void setAlumniRole(String alumniRole) { this.alumniRole = alumniRole; }
 }

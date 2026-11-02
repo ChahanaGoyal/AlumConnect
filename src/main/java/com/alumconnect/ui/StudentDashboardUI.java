@@ -1,19 +1,25 @@
 package com.alumconnect.ui;
 
+import com.alumconnect.model.MentorshipRequest;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
 import com.alumconnect.service.AlumniDirectoryService;
+import com.alumconnect.service.MentorshipRequestService;
 import com.alumconnect.service.StudentProfileService;
 import com.alumconnect.service.UserService;
+import com.alumconnect.service.dto.MentorshipRequestResult;
 import com.alumconnect.util.UserSession;
 
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Scanner;
 
 /**
- * Console UI for the Student Dashboard (Prompt 10, Prompt 12, Prompt 13 &amp; Prompt 14).
+ * Console UI for the Student Dashboard (Prompt 10, Prompt 12, Prompt 13, Prompt 14 &amp; Prompt 18).
  *
  * <p>Displays a role-gated menu to an authenticated Student and routes input
  * to the appropriate sub-feature UIs. The dashboard can only be entered by a
@@ -30,6 +36,7 @@ import java.util.Scanner;
  *   <li>Browse Alumni: explore registered alumni directory (Prompt 12)</li>
  *   <li>Search Alumni: search alumni by name, company, role, industry, skills (Prompt 13)</li>
  *   <li>Filter Alumni: filter alumni by structured criteria (Prompt 14)</li>
+ *   <li>My Mentorship Requests: view sent requests and status tracking (Prompt 18)</li>
  *   <li>Logout</li>
  *   <li>Exit</li>
  * </ol>
@@ -37,6 +44,7 @@ import java.util.Scanner;
  * <p>Business logic is never duplicated here; the dashboard delegates to
  * {@link StudentProfileService} via {@link StudentProfileUI},
  * {@link AlumniDirectoryService} via {@link AlumniDirectoryUI},
+ * {@link MentorshipRequestService} for request tracking,
  * and {@link UserService} for session management.
  */
 public class StudentDashboardUI {
@@ -50,13 +58,18 @@ public class StudentDashboardUI {
     public static final String OPTION_SEARCH_ALUMNI = "3";
     /** Menu option: filter alumni directory using structured criteria. */
     public static final String OPTION_FILTER_ALUMNI = "4";
+    /** Menu option: view sent mentorship requests and status tracking (Prompt 18). */
+    public static final String OPTION_MY_REQUESTS   = "5";
     /** Menu option: log the student out. */
     public static final String OPTION_LOGOUT        = "9";
     /** Menu option: exit the application. */
     public static final String OPTION_EXIT          = "0";
 
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private final StudentProfileUI studentProfileUI;
     private final AlumniDirectoryUI alumniDirectoryUI;
+    private final MentorshipRequestService mentorshipRequestService;
     private final UserService userService;
     private final Scanner scanner;
     private final PrintStream out;
@@ -67,7 +80,7 @@ public class StudentDashboardUI {
      * Production constructor — wires real services and uses {@code System.in/out}.
      */
     public StudentDashboardUI() {
-        this(new StudentProfileUI(), new AlumniDirectoryUI(), new UserService(), System.in, System.out);
+        this(new StudentProfileUI(), new AlumniDirectoryUI(), new MentorshipRequestService(), new UserService(), System.in, System.out);
     }
 
     /**
@@ -100,6 +113,7 @@ public class StudentDashboardUI {
                               PrintStream out) {
         this(studentProfileUI,
              new AlumniDirectoryUI(new AlumniDirectoryService(), scanner, out),
+             new MentorshipRequestService(),
              userService,
              scanner,
              out);
@@ -119,11 +133,11 @@ public class StudentDashboardUI {
                               UserService userService,
                               InputStream in,
                               PrintStream out) {
-        this(studentProfileUI, alumniDirectoryUI, userService, new Scanner(in), out);
+        this(studentProfileUI, alumniDirectoryUI, new MentorshipRequestService(), userService, new Scanner(in), out);
     }
 
     /**
-     * Full dependency-injection constructor with shared Scanner.
+     * Constructor allowing injection of profile and directory UIs with shared scanner.
      *
      * @param studentProfileUI  the student profile UI
      * @param alumniDirectoryUI the alumni directory UI
@@ -136,8 +150,40 @@ public class StudentDashboardUI {
                               UserService userService,
                               Scanner scanner,
                               PrintStream out) {
+        this(studentProfileUI, alumniDirectoryUI, new MentorshipRequestService(), userService, scanner, out);
+    }
+
+    /**
+     * Constructor allowing injection of profile, directory, and mentorship request services with streams.
+     */
+    public StudentDashboardUI(StudentProfileUI studentProfileUI,
+                              AlumniDirectoryUI alumniDirectoryUI,
+                              MentorshipRequestService mentorshipRequestService,
+                              UserService userService,
+                              InputStream in,
+                              PrintStream out) {
+        this(studentProfileUI, alumniDirectoryUI, mentorshipRequestService, userService, new Scanner(in), out);
+    }
+
+    /**
+     * Full dependency-injection constructor with shared Scanner.
+     *
+     * @param studentProfileUI         the student profile UI
+     * @param alumniDirectoryUI        the alumni directory UI
+     * @param mentorshipRequestService the mentorship request service
+     * @param userService              the user service
+     * @param scanner                  a pre-created, shared Scanner
+     * @param out                      output stream
+     */
+    public StudentDashboardUI(StudentProfileUI studentProfileUI,
+                              AlumniDirectoryUI alumniDirectoryUI,
+                              MentorshipRequestService mentorshipRequestService,
+                              UserService userService,
+                              Scanner scanner,
+                              PrintStream out) {
         this.studentProfileUI = studentProfileUI;
         this.alumniDirectoryUI = alumniDirectoryUI;
+        this.mentorshipRequestService = mentorshipRequestService;
         this.userService = userService;
         this.scanner = scanner;
         this.out = out;
@@ -215,6 +261,7 @@ public class StudentDashboardUI {
         out.println("  [" + OPTION_BROWSE_ALUMNI + "] Browse Alumni");
         out.println("  [" + OPTION_SEARCH_ALUMNI + "] Search Alumni");
         out.println("  [" + OPTION_FILTER_ALUMNI + "] Filter Alumni");
+        out.println("  [" + OPTION_MY_REQUESTS   + "] My Mentorship Requests");
         out.println("  [" + OPTION_LOGOUT        + "] Logout");
         out.println("  [" + OPTION_EXIT          + "] Exit");
         out.println("--------------------------------------------------");
@@ -242,6 +289,7 @@ public class StudentDashboardUI {
             case OPTION_BROWSE_ALUMNI -> handleBrowseAlumni();
             case OPTION_SEARCH_ALUMNI -> handleSearchAlumni();
             case OPTION_FILTER_ALUMNI -> handleFilterAlumni();
+            case OPTION_MY_REQUESTS, "M", "REQUESTS" -> handleMyMentorshipRequests(student);
             case OPTION_LOGOUT        -> handleLogout();
             case OPTION_EXIT          -> {
                 out.println("\n[AlumConnect] Goodbye! Thank you for using AlumConnect.");
@@ -294,6 +342,106 @@ public class StudentDashboardUI {
         } catch (Exception e) {
             out.println("[AlumConnect] An unexpected error occurred: " + e.getMessage());
         }
+    }
+
+    // ── My Mentorship Requests (Prompt 18) ────────────────────────────────────
+
+    /**
+     * Retrieves and displays all mentorship requests sent by the current student.
+     *
+     * @param student the currently logged-in Student
+     */
+    public void handleMyMentorshipRequests(Student student) {
+        validateStudentSession();
+
+        out.println("\n==================================================");
+        out.println("             MY MENTORSHIP REQUESTS               ");
+        out.println("==================================================");
+
+        MentorshipRequestResult result = mentorshipRequestService.getRequestsForStudent(student.getId());
+        if (!result.isSuccess()) {
+            out.println("[ERROR] " + result.getMessage());
+            out.println("==================================================");
+            return;
+        }
+
+        List<MentorshipRequest> requests = result.getRequests();
+        if (requests.isEmpty()) {
+            out.println("[INFO] You have not sent any mentorship requests yet.");
+            out.println("==================================================");
+            out.println("[AlumConnect] Returning to Student Dashboard.");
+            return;
+        }
+
+        out.println("Displaying " + requests.size() + " sent mentorship request(s):");
+        out.println("--------------------------------------------------");
+
+        for (int i = 0; i < requests.size(); i++) {
+            printStudentRequestCard(i + 1, requests.get(i));
+        }
+
+        out.println("==================================================");
+        out.println("[INFO] End of Mentorship Requests.");
+        out.println("[AlumConnect] Returning to Student Dashboard.");
+    }
+
+    /**
+     * Convenience overload retrieving the session student automatically.
+     */
+    public void handleMyMentorshipRequests() {
+        validateStudentSession();
+        UserSession session = UserSession.getInstance();
+        User currentUser = session.getCurrentUser().orElseThrow(
+                () -> new SecurityException("Unauthorized: session user is missing."));
+        if (currentUser instanceof Student s) {
+            handleMyMentorshipRequests(s);
+        }
+    }
+
+    private void printStudentRequestCard(int index, MentorshipRequest req) {
+        out.println(index + ". Request ID   : " + req.getId());
+        out.println("   Alumni Name  : " + safeString(req.getAlumniName())
+                + (req.getAlumniEmail() != null ? " (" + req.getAlumniEmail() + ")" : ""));
+        if (req.getAlumniCompany() != null || req.getAlumniRole() != null) {
+            String company = req.getAlumniCompany() != null ? req.getAlumniCompany() : "N/A";
+            String role = req.getAlumniRole() != null ? req.getAlumniRole() : "N/A";
+            out.println("   Professional : " + company + " | " + role);
+        }
+        if (req.getAlumniDegree() != null || req.getAlumniDepartment() != null) {
+            out.println("   Academic Info: " + safeString(req.getAlumniDegree()) + " - " + safeString(req.getAlumniDepartment()));
+        }
+        out.println("   Topic        : " + safeString(req.getTopic()));
+        out.println("   Message      : " + safeString(req.getMessage()));
+        out.println("   Status       : " + req.getStatus());
+        out.println("   Requested At : " + formatDateTime(req.getRequestedAt()));
+        if (req.getRespondedAt() != null) {
+            out.println("   Responded At : " + formatDateTime(req.getRespondedAt()));
+        }
+        if (req.getResponseNotes() != null && !req.getResponseNotes().isBlank()) {
+            out.println("   Response Note: " + req.getResponseNotes());
+        }
+        out.println("--------------------------------------------------");
+    }
+
+    private void validateStudentSession() {
+        UserSession session = UserSession.getInstance();
+        if (!session.isLoggedIn()) {
+            out.println("[AlumConnect] Access denied: You must be logged in to view your requests.");
+            throw new SecurityException("Unauthorized: No user is currently logged in.");
+        }
+        if (!session.isStudent()) {
+            out.println("[AlumConnect] Access denied: Mentorship requests can only be viewed by Students.");
+            throw new SecurityException("Access Denied: Current user is not a Student.");
+        }
+    }
+
+    private String formatDateTime(LocalDateTime ldt) {
+        if (ldt == null) return "Not Specified";
+        return ldt.format(DATE_TIME_FORMATTER);
+    }
+
+    private String safeString(String value) {
+        return (value != null && !value.isBlank()) ? value.trim() : "Not Specified";
     }
 
     // ── Profile sub-menu ──────────────────────────────────────────────────────

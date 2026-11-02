@@ -26,10 +26,11 @@ import java.util.Optional;
  *
  * <p>Supports:
  * <ul>
- *   <li>Sending mentorship requests (Student role)</li>
- *   <li>Retrieving received mentorship requests (Alumni role)</li>
- *   <li>Accepting pending mentorship requests (Alumni role)</li>
- *   <li>Rejecting pending mentorship requests (Alumni role)</li>
+ *   <li>Sending mentorship requests (Student role - Prompt 16)</li>
+ *   <li>Retrieving received mentorship requests (Alumni role - Prompt 17)</li>
+ *   <li>Accepting pending mentorship requests (Alumni role - Prompt 17)</li>
+ *   <li>Rejecting pending mentorship requests (Alumni role - Prompt 17)</li>
+ *   <li>Retrieving sent mentorship requests (Student role - Prompt 18)</li>
  * </ul>
  */
 public class MentorshipRequestService {
@@ -205,6 +206,83 @@ public class MentorshipRequestService {
      */
     public List<MentorshipRequest> getRequests(int alumniId) {
         MentorshipRequestResult result = getRequestsForAlumni(alumniId);
+        if (!result.isSuccess()) {
+            if (result.getMessage().startsWith("Access denied")) {
+                throw new SecurityException(result.getMessage());
+            }
+            throw new IllegalArgumentException(result.getMessage());
+        }
+        return result.getRequests();
+    }
+
+    /**
+     * Retrieves all mentorship requests sent by the specified student.
+     *
+     * <p>Security invariants:
+     * <ul>
+     *   <li>User must be authenticated.</li>
+     *   <li>User must have the {@link Role#STUDENT} role.</li>
+     *   <li>User can only view requests sent by themselves (studentId must match session user ID).</li>
+     * </ul>
+     *
+     * @param studentId target student user ID
+     * @return {@link MentorshipRequestResult} carrying the list of requests on success, or an error message on failure
+     */
+    public MentorshipRequestResult getRequestsForStudent(int studentId) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return MentorshipRequestResult.failure("Access denied: You must be logged in to view your mentorship requests.");
+        }
+
+        // 2. Role check
+        User user = sessionUser.get();
+        if (user.getRole() != Role.STUDENT) {
+            return MentorshipRequestResult.failure("Access denied: Only students can view sent mentorship requests.");
+        }
+
+        // 3. ID validation
+        if (studentId <= 0) {
+            return MentorshipRequestResult.failure("Invalid student ID: ID must be a positive integer.");
+        }
+
+        // 4. Ownership check: student can only view their own sent requests
+        if (user.getId() == null || user.getId() != studentId) {
+            return MentorshipRequestResult.failure("Access denied: You cannot view mentorship requests for another student.");
+        }
+
+        // 5. Query repository
+        try {
+            List<MentorshipRequest> requests = requestRepository.findRequestsByStudentId(studentId);
+            return MentorshipRequestResult.success(requests, "Retrieved " + requests.size() + " mentorship request(s).");
+        } catch (SQLException e) {
+            return MentorshipRequestResult.failure("Database error while retrieving mentorship requests: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Convenience method to retrieve sent requests for the currently logged-in student.
+     *
+     * @return result containing list of requests on success, or error message on failure
+     */
+    public MentorshipRequestResult getMyRequests() {
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty() || sessionUser.get().getRole() != Role.STUDENT || sessionUser.get().getId() == null) {
+            return getRequestsForStudent(-1); // will trigger proper auth/role failure
+        }
+        return getRequestsForStudent(sessionUser.get().getId());
+    }
+
+    /**
+     * Direct list-returning method for student requests.
+     *
+     * @param studentId target student user ID
+     * @return list of MentorshipRequest
+     * @throws SecurityException if unauthorized
+     * @throws IllegalArgumentException if ID is invalid
+     */
+    public List<MentorshipRequest> getStudentRequests(int studentId) {
+        MentorshipRequestResult result = getRequestsForStudent(studentId);
         if (!result.isSuccess()) {
             if (result.getMessage().startsWith("Access denied")) {
                 throw new SecurityException(result.getMessage());

@@ -25,7 +25,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("Mentorship Request Service Tests (Prompt 16 & 17)")
+@DisplayName("Mentorship Request Service Tests (Prompt 16, 17 & 18)")
 class MentorshipRequestServiceTest {
 
     private InMemoryMentorshipRequestRepository fakeRequestRepository;
@@ -685,6 +685,188 @@ class MentorshipRequestServiceTest {
         assertTrue(updateRes.getMessage().contains("Database error"));
     }
 
+    // ── Prompt 18 Tests: Student Mentorship Request Status ────────────────────
+
+    @Test
+    @DisplayName("29. Authenticated student can retrieve their sent requests with alumni details")
+    void testRetrieveRequestsForStudentSuccessfully() {
+        UserSession.getInstance().login(loggedInStudent); // Student ID 101
+
+        MentorshipRequest req1 = new MentorshipRequest(101, 202, "Distributed Systems", "Need guidance on Raft");
+        req1.setId(101);
+        req1.setStatus(MentorshipStatus.PENDING);
+        req1.setAlumniName("Neha Gupta");
+        req1.setAlumniEmail("alumni@google.com");
+        req1.setAlumniCompany("Google");
+        req1.setAlumniRole("Staff Engineer");
+        req1.setAlumniDegree("Bachelor of Technology");
+        req1.setAlumniDepartment("Computer Science");
+        fakeRequestRepository.addRequest(req1);
+
+        MentorshipRequestResult result = requestService.getRequestsForStudent(101);
+        assertTrue(result.isSuccess());
+        assertEquals(1, result.getRequests().size());
+
+        MentorshipRequest retrieved = result.getRequests().get(0);
+        assertEquals(101, retrieved.getId());
+        assertEquals("Neha Gupta", retrieved.getAlumniName());
+        assertEquals("alumni@google.com", retrieved.getAlumniEmail());
+        assertEquals("Google", retrieved.getAlumniCompany());
+        assertEquals("Staff Engineer", retrieved.getAlumniRole());
+        assertEquals("Bachelor of Technology", retrieved.getAlumniDegree());
+        assertEquals("Computer Science", retrieved.getAlumniDepartment());
+        assertEquals(MentorshipStatus.PENDING, retrieved.getStatus());
+    }
+
+    @Test
+    @DisplayName("30. Student sees multiple requests with different statuses")
+    void testStudentSeesMultipleRequestsWithDifferentStatuses() {
+        UserSession.getInstance().login(loggedInStudent); // Student ID 101
+
+        MentorshipRequest r1 = new MentorshipRequest(101, 202, "Topic 1", "Msg 1");
+        r1.setId(1);
+        r1.setStatus(MentorshipStatus.PENDING);
+        fakeRequestRepository.addRequest(r1);
+
+        MentorshipRequest r2 = new MentorshipRequest(101, 303, "Topic 2", "Msg 2");
+        r2.setId(2);
+        r2.setStatus(MentorshipStatus.ACCEPTED);
+        fakeRequestRepository.addRequest(r2);
+
+        MentorshipRequest r3 = new MentorshipRequest(101, 202, "Topic 3", "Msg 3");
+        r3.setId(3);
+        r3.setStatus(MentorshipStatus.REJECTED);
+        fakeRequestRepository.addRequest(r3);
+
+        MentorshipRequest r4 = new MentorshipRequest(101, 303, "Topic 4", "Msg 4");
+        r4.setId(4);
+        r4.setStatus(MentorshipStatus.COMPLETED);
+        fakeRequestRepository.addRequest(r4);
+
+        MentorshipRequest r5 = new MentorshipRequest(101, 202, "Topic 5", "Msg 5");
+        r5.setId(5);
+        r5.setStatus(MentorshipStatus.CANCELLED);
+        fakeRequestRepository.addRequest(r5);
+
+        MentorshipRequestResult result = requestService.getRequestsForStudent(101);
+        assertTrue(result.isSuccess());
+        assertEquals(5, result.getRequests().size());
+        assertTrue(result.getRequests().stream().anyMatch(r -> r.getStatus() == MentorshipStatus.PENDING));
+        assertTrue(result.getRequests().stream().anyMatch(r -> r.getStatus() == MentorshipStatus.ACCEPTED));
+        assertTrue(result.getRequests().stream().anyMatch(r -> r.getStatus() == MentorshipStatus.REJECTED));
+        assertTrue(result.getRequests().stream().anyMatch(r -> r.getStatus() == MentorshipStatus.COMPLETED));
+        assertTrue(result.getRequests().stream().anyMatch(r -> r.getStatus() == MentorshipStatus.CANCELLED));
+    }
+
+    @Test
+    @DisplayName("31. Student with no requests gets an empty result successfully")
+    void testStudentWithNoRequestsGetsEmptyResult() {
+        UserSession.getInstance().login(loggedInStudent); // Student ID 101
+
+        MentorshipRequestResult result = requestService.getRequestsForStudent(101);
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getRequests());
+        assertTrue(result.getRequests().isEmpty());
+    }
+
+    @Test
+    @DisplayName("32. Unauthenticated user cannot view student requests")
+    void testUnauthenticatedUserCannotViewStudentRequests() {
+        // No session
+        MentorshipRequestResult result = requestService.getRequestsForStudent(101);
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().contains("must be logged in"));
+    }
+
+    @Test
+    @DisplayName("33. Alumni user cannot view student requests")
+    void testAlumniUserCannotViewStudentRequests() {
+        UserSession.getInstance().login(targetAlumni); // Alumni ID 202
+
+        MentorshipRequestResult result = requestService.getRequestsForStudent(101);
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().contains("Only students can view sent mentorship requests"));
+    }
+
+    @Test
+    @DisplayName("34. Invalid student ID is rejected")
+    void testInvalidStudentIdRejected() {
+        UserSession.getInstance().login(loggedInStudent);
+
+        MentorshipRequestResult res1 = requestService.getRequestsForStudent(0);
+        assertFalse(res1.isSuccess());
+        assertTrue(res1.getMessage().contains("Invalid student ID"));
+
+        MentorshipRequestResult res2 = requestService.getRequestsForStudent(-1);
+        assertFalse(res2.isSuccess());
+        assertTrue(res2.getMessage().contains("Invalid student ID"));
+    }
+
+    @Test
+    @DisplayName("35. Student cannot view another student's requests")
+    void testStudentCannotViewAnotherStudentsRequests() {
+        UserSession.getInstance().login(loggedInStudent); // Student ID 101
+
+        MentorshipRequestResult result = requestService.getRequestsForStudent(102); // Student ID 102
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().contains("cannot view mentorship requests for another student"));
+    }
+
+    @Test
+    @DisplayName("36. Database failure on student request query handled gracefully")
+    void testDatabaseFailureOnStudentQueryHandledGracefully() {
+        UserSession.getInstance().login(loggedInStudent);
+        fakeRequestRepository.setThrowOnQuery(true);
+
+        MentorshipRequestResult result = requestService.getRequestsForStudent(101);
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().contains("Database error while retrieving mentorship requests"));
+    }
+
+    @Test
+    @DisplayName("37. getMyRequests works for logged-in student")
+    void testGetMyRequestsWorksForLoggedInStudent() {
+        UserSession.getInstance().login(loggedInStudent); // Student ID 101
+
+        MentorshipRequest req = new MentorshipRequest(101, 202, "Topic", "Msg");
+        req.setId(77);
+        fakeRequestRepository.addRequest(req);
+
+        MentorshipRequestResult result = requestService.getMyRequests();
+        assertTrue(result.isSuccess());
+        assertEquals(1, result.getRequests().size());
+        assertEquals(77, result.getRequests().get(0).getId());
+
+        // When logged out
+        UserSession.getInstance().logout();
+        MentorshipRequestResult unauthRes = requestService.getMyRequests();
+        assertFalse(unauthRes.isSuccess());
+    }
+
+    @Test
+    @DisplayName("38. getStudentRequests returns list and throws on unauthorized access")
+    void testGetStudentRequestsDirectMethod() {
+        UserSession.getInstance().login(loggedInStudent);
+
+        MentorshipRequest req = new MentorshipRequest(101, 202, "Topic", "Msg");
+        req.setId(88);
+        fakeRequestRepository.addRequest(req);
+
+        List<MentorshipRequest> list = requestService.getStudentRequests(101);
+        assertEquals(1, list.size());
+
+        // Unauthorized access throws SecurityException
+        assertThrows(SecurityException.class, () -> requestService.getStudentRequests(999));
+        // Invalid ID throws IllegalArgumentException
+        assertThrows(IllegalArgumentException.class, () -> {
+            Student invalidStudent = new Student();
+            invalidStudent.setId(-1);
+            invalidStudent.setRole(Role.STUDENT);
+            UserSession.getInstance().login(invalidStudent);
+            requestService.getStudentRequests(-1);
+        });
+    }
+
     // ── In-Memory MentorshipRequestRepository Fake ──────────────────────────
 
     private static class InMemoryMentorshipRequestRepository implements MentorshipRequestRepository {
@@ -768,6 +950,16 @@ class MentorshipRequestServiceTest {
             }
             return requests.values().stream()
                     .filter(r -> r.getAlumniId() == alumniId)
+                    .toList();
+        }
+
+        @Override
+        public List<MentorshipRequest> findRequestsByStudentId(int studentId) throws SQLException {
+            if (throwOnQuery) {
+                throw new SQLException("Simulated DB query error");
+            }
+            return requests.values().stream()
+                    .filter(r -> r.getStudentId() == studentId)
                     .toList();
         }
 

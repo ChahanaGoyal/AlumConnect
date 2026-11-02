@@ -1,6 +1,8 @@
 package com.alumconnect.service;
 
 import com.alumconnect.model.Alumni;
+import com.alumconnect.model.MentorshipRequest;
+import com.alumconnect.model.MentorshipStatus;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.User;
 import com.alumconnect.repository.AlumniProfileRepository;
@@ -14,14 +16,21 @@ import com.alumconnect.service.dto.MentorshipRequestResult;
 import com.alumconnect.util.UserSession;
 
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Service handling mentorship request operations.
+ * Service handling mentorship request operations across student and alumni lifecycles.
  *
- * Only authenticated students may send mentorship requests. The service validates the target alumni,
- * duplicate requests, mentorship availability, and active mentee capacity before creating a new PENDING request.
+ * <p>Supports:
+ * <ul>
+ *   <li>Sending mentorship requests (Student role)</li>
+ *   <li>Retrieving received mentorship requests (Alumni role)</li>
+ *   <li>Accepting pending mentorship requests (Alumni role)</li>
+ *   <li>Rejecting pending mentorship requests (Alumni role)</li>
+ * </ul>
  */
 public class MentorshipRequestService {
 
@@ -125,6 +134,203 @@ public class MentorshipRequestService {
             return MentorshipRequestResult.success(requestId, "Mentorship request sent successfully.");
         } catch (SQLException e) {
             return MentorshipRequestResult.failure("Database error while sending mentorship request: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Retrieves all mentorship requests received by the specified alumnus.
+     *
+     * <p>Security invariants:
+     * <ul>
+     *   <li>User must be authenticated.</li>
+     *   <li>User must have the {@link Role#ALUMNI} role.</li>
+     *   <li>User can only view requests sent to themselves (alumniId must match session user ID).</li>
+     * </ul>
+     *
+     * @param alumniId target alumni user ID
+     * @return {@link MentorshipRequestResult} carrying the list of requests on success, or an error message on failure
+     */
+    public MentorshipRequestResult getRequestsForAlumni(int alumniId) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return MentorshipRequestResult.failure("Access denied: You must be logged in to view mentorship requests.");
+        }
+
+        // 2. Role check
+        User user = sessionUser.get();
+        if (user.getRole() != Role.ALUMNI) {
+            return MentorshipRequestResult.failure("Access denied: Only alumni can view received mentorship requests.");
+        }
+
+        // 3. ID validation
+        if (alumniId <= 0) {
+            return MentorshipRequestResult.failure("Invalid alumni ID: ID must be a positive integer.");
+        }
+
+        // 4. Ownership check: alumnus can only view their own received requests
+        if (user.getId() == null || user.getId() != alumniId) {
+            return MentorshipRequestResult.failure("Access denied: You cannot view mentorship requests for another alumnus.");
+        }
+
+        // 5. Query repository
+        try {
+            List<MentorshipRequest> requests = requestRepository.findRequestsByAlumniId(alumniId);
+            return MentorshipRequestResult.success(requests, "Retrieved " + requests.size() + " mentorship request(s).");
+        } catch (SQLException e) {
+            return MentorshipRequestResult.failure("Database error while retrieving mentorship requests: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Convenience method to retrieve received requests for the currently logged-in alumnus.
+     *
+     * @return result containing list of requests on success, or error message on failure
+     */
+    public MentorshipRequestResult getReceivedRequests() {
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty() || sessionUser.get().getRole() != Role.ALUMNI || sessionUser.get().getId() == null) {
+            return getRequestsForAlumni(-1); // will trigger proper auth/role failure
+        }
+        return getRequestsForAlumni(sessionUser.get().getId());
+    }
+
+    /**
+     * Direct list-returning method for convenience.
+     *
+     * @param alumniId target alumni user ID
+     * @return list of MentorshipRequest
+     * @throws SecurityException if unauthorized
+     * @throws IllegalArgumentException if ID is invalid
+     */
+    public List<MentorshipRequest> getRequests(int alumniId) {
+        MentorshipRequestResult result = getRequestsForAlumni(alumniId);
+        if (!result.isSuccess()) {
+            if (result.getMessage().startsWith("Access denied")) {
+                throw new SecurityException(result.getMessage());
+            }
+            throw new IllegalArgumentException(result.getMessage());
+        }
+        return result.getRequests();
+    }
+
+    /**
+     * Accepts a pending mentorship request.
+     *
+     * <p>Security invariants:
+     * <ul>
+     *   <li>Must be an authenticated alumnus.</li>
+     *   <li>Request ID must be positive and exist.</li>
+     *   <li>Request must belong to the authenticated alumnus.</li>
+     *   <li>Request must currently be in {@link MentorshipStatus#PENDING} status.</li>
+     * </ul>
+     *
+     * @param requestId ID of the mentorship request to accept
+     * @return result containing success/failure status and the request ID
+     */
+    public MentorshipRequestResult acceptRequest(int requestId) {
+        return respondToRequest(requestId, MentorshipStatus.ACCEPTED);
+    }
+
+    /**
+     * Rejects a pending mentorship request.
+     *
+     * <p>Security invariants:
+     * <ul>
+     *   <li>Must be an authenticated alumnus.</li>
+     *   <li>Request ID must be positive and exist.</li>
+     *   <li>Request must belong to the authenticated alumnus.</li>
+     *   <li>Request must currently be in {@link MentorshipStatus#PENDING} status.</li>
+     * </ul>
+     *
+     * @param requestId ID of the mentorship request to reject
+     * @return result containing success/failure status and the request ID
+     */
+    public MentorshipRequestResult rejectRequest(int requestId) {
+        return respondToRequest(requestId, MentorshipStatus.REJECTED);
+    }
+
+    /**
+     * Accepts a pending mentorship request verifying the given alumniId.
+     */
+    public MentorshipRequestResult acceptRequest(int requestId, int alumniId) {
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isPresent() && (sessionUser.get().getId() == null || sessionUser.get().getId() != alumniId)) {
+            return MentorshipRequestResult.failure("Access denied: You can only respond to mentorship requests sent to you.");
+        }
+        return acceptRequest(requestId);
+    }
+
+    /**
+     * Rejects a pending mentorship request verifying the given alumniId.
+     */
+    public MentorshipRequestResult rejectRequest(int requestId, int alumniId) {
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isPresent() && (sessionUser.get().getId() == null || sessionUser.get().getId() != alumniId)) {
+            return MentorshipRequestResult.failure("Access denied: You can only respond to mentorship requests sent to you.");
+        }
+        return rejectRequest(requestId);
+    }
+
+    private MentorshipRequestResult respondToRequest(int requestId, MentorshipStatus newStatus) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return MentorshipRequestResult.failure("Access denied: You must be logged in to respond to mentorship requests.");
+        }
+
+        // 2. Role check
+        User user = sessionUser.get();
+        if (user.getRole() != Role.ALUMNI) {
+            return MentorshipRequestResult.failure("Access denied: Only alumni can respond to mentorship requests.");
+        }
+
+        // 3. ID validation
+        if (requestId <= 0) {
+            return MentorshipRequestResult.failure("Invalid request ID: Request ID must be a positive integer.");
+        }
+
+        // 4. Status validation argument check
+        if (newStatus != MentorshipStatus.ACCEPTED && newStatus != MentorshipStatus.REJECTED) {
+            return MentorshipRequestResult.failure("Invalid status transition: Can only transition to ACCEPTED or REJECTED.");
+        }
+
+        try {
+            // 5. Look up existing request
+            Optional<MentorshipRequest> reqOpt = requestRepository.findRequestById(requestId);
+            if (reqOpt.isEmpty()) {
+                return MentorshipRequestResult.failure("Mentorship request not found with ID: " + requestId);
+            }
+
+            MentorshipRequest request = reqOpt.get();
+
+            // 6. Ownership check: alumni_id must match authenticated alumnus
+            if (user.getId() == null || request.getAlumniId() != user.getId()) {
+                return MentorshipRequestResult.failure("Access denied: You can only respond to mentorship requests sent to you.");
+            }
+
+            // 7. Non-pending check: cannot respond to requests that are not PENDING
+            if (request.getStatus() != MentorshipStatus.PENDING) {
+                return MentorshipRequestResult.failure(
+                        "Cannot respond to request: Request is not pending (current status: " + request.getStatus() + ").");
+            }
+
+            // 8. Update status in database
+            LocalDateTime respondedAt = LocalDateTime.now();
+            boolean updated = requestRepository.updateRequestStatus(requestId, newStatus, respondedAt);
+            if (!updated) {
+                return MentorshipRequestResult.failure("Failed to update mentorship request status. Please try again.");
+            }
+
+            // 9. Update model instance
+            request.setStatus(newStatus);
+            request.setRespondedAt(respondedAt);
+
+            String actionWord = newStatus == MentorshipStatus.ACCEPTED ? "accepted" : "rejected";
+            return MentorshipRequestResult.success(requestId, "Mentorship request " + actionWord + " successfully.");
+
+        } catch (SQLException e) {
+            return MentorshipRequestResult.failure("Database error while responding to mentorship request: " + e.getMessage());
         }
     }
 }

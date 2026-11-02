@@ -1,14 +1,19 @@
 package com.alumconnect.ui;
 
 import com.alumconnect.model.Alumni;
+import com.alumconnect.model.MentorshipRequest;
+import com.alumconnect.model.MentorshipStatus;
 import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
 import com.alumconnect.repository.AlumniProfileRepository;
+import com.alumconnect.repository.MentorshipRequestRepository;
 import com.alumconnect.repository.UserRepository;
 import com.alumconnect.service.AlumniProfileService;
+import com.alumconnect.service.MentorshipRequestService;
 import com.alumconnect.service.UserService;
 import com.alumconnect.service.dto.AlumniProfileResult;
+import com.alumconnect.service.dto.MentorshipRequestDto;
 import com.alumconnect.util.PasswordUtil;
 import com.alumconnect.util.UserSession;
 import org.junit.jupiter.api.AfterEach;
@@ -21,7 +26,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -91,13 +98,21 @@ class AlumniDashboardUITest {
 
     private AlumniDashboardUI buildDashboard(String simulatedInput,
                                              ByteArrayOutputStream capture) {
+        return buildDashboardWithMentorship(simulatedInput,
+                new MentorshipRequestService(new FakeMentorshipRequestRepository(), userRepo),
+                capture);
+    }
+
+    private AlumniDashboardUI buildDashboardWithMentorship(String simulatedInput,
+                                                          MentorshipRequestService mentorshipService,
+                                                          ByteArrayOutputStream capture) {
         ByteArrayInputStream in = new ByteArrayInputStream(
                 simulatedInput.getBytes(StandardCharsets.UTF_8));
         PrintStream ps = new PrintStream(capture);
 
         FakeAlumniProfileService fakeProfileService = new FakeAlumniProfileService();
         AlumniProfileUI profileUI = new AlumniProfileUI(fakeProfileService, in, ps);
-        return new AlumniDashboardUI(profileUI, userService, in, ps);
+        return new AlumniDashboardUI(profileUI, mentorshipService, userService, in, ps);
     }
 
     // ── Security / access control tests ───────────────────────────────────────
@@ -327,7 +342,228 @@ class AlumniDashboardUITest {
         assertTrue(capture.toString(StandardCharsets.UTF_8).contains("logged out"));
     }
 
+    // ── Prompt 17: Mentorship Request Management UI Tests ─────────────────────
+
+    @Test
+    @DisplayName("View mentorship requests displays header and request details")
+    void testViewMentorshipRequestsDisplaysDetails() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeReqRepo = new FakeMentorshipRequestRepository();
+        MentorshipRequest req = new MentorshipRequest(student.getId(), alumni.getId(),
+                "System Design Advice", "Would love feedback on microservice design.");
+        req.setId(10);
+        req.setStatus(MentorshipStatus.PENDING);
+        req.setStudentName("Anshika Singh");
+        req.setStudentEmail("student@thapar.edu");
+        req.setStudentDegree("Bachelor of Technology");
+        req.setStudentDepartment("Computer Science");
+        req.setRequestedAt(LocalDateTime.of(2026, 11, 2, 10, 30));
+        fakeReqRepo.addRequest(req);
+
+        MentorshipRequestService mentorshipService = new MentorshipRequestService(fakeReqRepo, userRepo);
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+
+        // Option 2 (View Requests) -> 0 (Back to dashboard)
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("2\n0\n", mentorshipService, capture);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("RECEIVED MENTORSHIP REQUESTS"), "Header must appear");
+        assertTrue(output.contains("Anshika Singh"), "Student name must appear");
+        assertTrue(output.contains("student@thapar.edu"), "Student email must appear");
+        assertTrue(output.contains("System Design Advice"), "Topic must appear");
+        assertTrue(output.contains("microservice design"), "Message must appear");
+        assertTrue(output.contains("PENDING"), "Status must appear");
+        assertTrue(output.contains("2026-11-02 10:30:00"), "Requested date/time must appear");
+        assertTrue(output.contains("Actions for Pending Requests"), "Actions must appear for pending requests");
+    }
+
+    @Test
+    @DisplayName("View mentorship requests when empty displays friendly message")
+    void testViewMentorshipRequestsEmpty() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeReqRepo = new FakeMentorshipRequestRepository();
+        MentorshipRequestService mentorshipService = new MentorshipRequestService(fakeReqRepo, userRepo);
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+
+        // Option 2 (View Requests)
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("2\n", mentorshipService, capture);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("RECEIVED MENTORSHIP REQUESTS"));
+        assertTrue(output.contains("No mentorship requests received yet"));
+        assertTrue(output.contains("Returning to Alumni Dashboard"));
+    }
+
+    @Test
+    @DisplayName("Accept pending request updates status, sets responded_at, and refreshes")
+    void testAcceptPendingRequestAndRefresh() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeReqRepo = new FakeMentorshipRequestRepository();
+        MentorshipRequest req = new MentorshipRequest(student.getId(), alumni.getId(),
+                "Architecture Guidance", "Need tips");
+        req.setId(10);
+        req.setStatus(MentorshipStatus.PENDING);
+        req.setStudentName("Anshika Singh");
+        req.setStudentEmail("student@thapar.edu");
+        req.setRequestedAt(LocalDateTime.of(2026, 11, 2, 9, 0));
+        fakeReqRepo.addRequest(req);
+
+        MentorshipRequestService mentorshipService = new MentorshipRequestService(fakeReqRepo, userRepo);
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+
+        // Option 2 -> Accept ('A') -> Request ID '10' -> 0 (Back to dashboard)
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("2\nA\n10\n0\n", mentorshipService, capture);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[SUCCESS]"), "Success message must appear on accept");
+        assertTrue(output.contains("accepted successfully"), "Accepted message must appear");
+        assertTrue(output.contains("Status       : ACCEPTED"), "Status must refresh to ACCEPTED");
+        assertTrue(output.contains("Responded At"), "Responded At must be displayed after accepting");
+        assertEquals(MentorshipStatus.ACCEPTED, fakeReqRepo.findRequestById(10).get().getStatus());
+    }
+
+    @Test
+    @DisplayName("Reject pending request updates status, sets responded_at, and refreshes")
+    void testRejectPendingRequestAndRefresh() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeReqRepo = new FakeMentorshipRequestRepository();
+        MentorshipRequest req = new MentorshipRequest(student.getId(), alumni.getId(),
+                "Interview Prep", "Help with mocks");
+        req.setId(15);
+        req.setStatus(MentorshipStatus.PENDING);
+        req.setStudentName("Anshika Singh");
+        req.setStudentEmail("student@thapar.edu");
+        req.setRequestedAt(LocalDateTime.of(2026, 11, 2, 9, 0));
+        fakeReqRepo.addRequest(req);
+
+        MentorshipRequestService mentorshipService = new MentorshipRequestService(fakeReqRepo, userRepo);
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+
+        // Option 2 -> Reject ('R') -> Request ID '15' -> 0 (Back to dashboard)
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("2\nR\n15\n0\n", mentorshipService, capture);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[SUCCESS]"), "Success message must appear on reject");
+        assertTrue(output.contains("rejected successfully"), "Rejected message must appear");
+        assertTrue(output.contains("Status       : REJECTED"), "Status must refresh to REJECTED");
+        assertTrue(output.contains("Responded At"), "Responded At must be displayed after rejecting");
+        assertEquals(MentorshipStatus.REJECTED, fakeReqRepo.findRequestById(15).get().getStatus());
+    }
+
+    @Test
+    @DisplayName("Requests that are not pending hide accept and reject action choices")
+    void testNoPendingRequestsHidesActions() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeReqRepo = new FakeMentorshipRequestRepository();
+        MentorshipRequest req = new MentorshipRequest(student.getId(), alumni.getId(),
+                "Completed Project", "Thanks!");
+        req.setId(20);
+        req.setStatus(MentorshipStatus.ACCEPTED);
+        req.setStudentName("Anshika Singh");
+        req.setStudentEmail("student@thapar.edu");
+        req.setRequestedAt(LocalDateTime.of(2026, 11, 2, 9, 0));
+        req.setRespondedAt(LocalDateTime.of(2026, 11, 2, 9, 30));
+        fakeReqRepo.addRequest(req);
+
+        MentorshipRequestService mentorshipService = new MentorshipRequestService(fakeReqRepo, userRepo);
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+
+        // Option 2 -> 0 (Back)
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("2\n0\n", mentorshipService, capture);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("There are no pending requests to accept or reject"));
+        assertFalse(output.contains("Actions for Pending Requests:"), "Pending actions must not be shown");
+    }
+
+    @Test
+    @DisplayName("Entering invalid or non-pending request ID displays clear error message")
+    void testAcceptInvalidRequestIdShowsError() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeReqRepo = new FakeMentorshipRequestRepository();
+        MentorshipRequest req = new MentorshipRequest(student.getId(), alumni.getId(),
+                "Topic", "Message");
+        req.setId(10);
+        req.setStatus(MentorshipStatus.PENDING);
+        fakeReqRepo.addRequest(req);
+
+        MentorshipRequestService mentorshipService = new MentorshipRequestService(fakeReqRepo, userRepo);
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+
+        // Option 2 -> Accept ('A') -> 999 (invalid) -> 0 (exit actions)
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("2\nA\n999\n0\n", mentorshipService, capture);
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR]"), "Error message must appear");
+        assertTrue(output.contains("not a pending request in your list"));
+    }
+
+    @Test
+    @DisplayName("Student cannot invoke viewMentorshipRequests")
+    void testStudentCannotAccessMentorshipRequestsUI() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        AlumniDashboardUI dashboard = buildDashboard("", new ByteArrayOutputStream());
+        assertThrows(SecurityException.class, dashboard::viewMentorshipRequests,
+                "Student role must throw SecurityException when calling viewMentorshipRequests");
+    }
+
+    @Test
+    @DisplayName("Unauthenticated user cannot invoke viewMentorshipRequests")
+    void testUnauthenticatedCannotAccessMentorshipRequestsUI() {
+        AlumniDashboardUI dashboard = buildDashboard("", new ByteArrayOutputStream());
+        assertThrows(SecurityException.class, dashboard::viewMentorshipRequests,
+                "Unauthenticated session must throw SecurityException when calling viewMentorshipRequests");
+    }
+
     // ── In-memory fakes ───────────────────────────────────────────────────────
+
+    private static class FakeMentorshipRequestRepository implements MentorshipRequestRepository {
+        private final Map<Integer, MentorshipRequest> requests = new HashMap<>();
+
+        void addRequest(MentorshipRequest req) {
+            requests.put(req.getId(), req);
+        }
+
+        @Override
+        public List<MentorshipRequest> findRequestsByAlumniId(int alumniId) {
+            return requests.values().stream().filter(r -> r.getAlumniId() == alumniId).toList();
+        }
+
+        @Override
+        public Optional<MentorshipRequest> findRequestById(int requestId) {
+            return Optional.ofNullable(requests.get(requestId));
+        }
+
+        @Override
+        public boolean updateRequestStatus(int requestId, MentorshipStatus newStatus, LocalDateTime respondedAt) {
+            MentorshipRequest req = requests.get(requestId);
+            if (req != null) {
+                req.setStatus(newStatus);
+                req.setRespondedAt(respondedAt);
+                return true;
+            }
+            return false;
+        }
+
+        @Override public int createRequest(MentorshipRequestDto dto) { return 1; }
+        @Override public boolean existsPending(int studentId, int alumniId) { return false; }
+        @Override public boolean existsAccepted(int studentId, int alumniId) { return false; }
+        @Override public int countActiveMentees(int alumniId) { return 0; }
+        @Override public boolean isAlumniAvailable(int alumniId) { return true; }
+    }
 
     /** In-memory UserRepository used by tests that need a UserService. */
     private static class InMemoryUserRepository implements UserRepository {

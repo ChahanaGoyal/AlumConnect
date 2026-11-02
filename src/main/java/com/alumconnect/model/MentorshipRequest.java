@@ -5,7 +5,8 @@ import java.util.Objects;
 
 /**
  * Model representing a row in the {@code mentorship_requests} table.
- * Mirrors the database schema defined in schema.sql.
+ * Mirrors the database schema defined in schema.sql, and optionally holds
+ * associated student information populated via table joins.
  */
 public class MentorshipRequest {
     private Integer id; // AUTO_INCREMENT primary key
@@ -14,10 +15,18 @@ public class MentorshipRequest {
     private String topic;
     private String message;
     private MentorshipStatus status = MentorshipStatus.PENDING;
+    private String responseNotes;
     private LocalDateTime requestedAt = LocalDateTime.now();
     private LocalDateTime respondedAt;
     private LocalDateTime completedAt;
     private LocalDateTime updatedAt;
+
+    // Associated student information (populated on retrieval with user/profile join)
+    private String studentName;
+    private String studentEmail;
+    private String studentDegree;
+    private String studentDepartment;
+    private Integer studentGraduationYear;
 
     public MentorshipRequest() {
         // Required for JDBC mapping
@@ -51,6 +60,9 @@ public class MentorshipRequest {
     public MentorshipStatus getStatus() { return status; }
     public void setStatus(MentorshipStatus status) { this.status = Objects.requireNonNull(status); }
 
+    public String getResponseNotes() { return responseNotes; }
+    public void setResponseNotes(String responseNotes) { this.responseNotes = responseNotes; }
+
     public LocalDateTime getRequestedAt() { return requestedAt; }
     public void setRequestedAt(LocalDateTime requestedAt) { this.requestedAt = requestedAt; }
 
@@ -62,5 +74,19 @@ public class MentorshipRequest {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-}
 
+    public String getStudentName() { return studentName; }
+    public void setStudentName(String studentName) { this.studentName = studentName; }
+
+    public String getStudentEmail() { return studentEmail; }
+    public void setStudentEmail(String studentEmail) { this.studentEmail = studentEmail; }
+
+    public String getStudentDegree() { return studentDegree; }
+    public void setStudentDegree(String studentDegree) { this.studentDegree = studentDegree; }
+
+    public String getStudentDepartment() { return studentDepartment; }
+    public void setStudentDepartment(String studentDepartment) { this.studentDepartment = studentDepartment; }
+
+    public Integer getStudentGraduationYear() { return studentGraduationYear; }
+    public void setStudentGraduationYear(Integer studentGraduationYear) { this.studentGraduationYear = studentGraduationYear; }
+}

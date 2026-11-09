@@ -14,6 +14,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import com.alumconnect.util.ValidationUtil;
 
 /**
  * Service providing Alumni Directory browsing, searching, structured filtering,
@@ -31,6 +34,8 @@ import java.util.Optional;
  * JDBC queries against the existing {@code users} and {@code alumni_profiles} tables.
  */
 public class AlumniDirectoryService {
+
+    private static final Logger LOGGER = Logger.getLogger(AlumniDirectoryService.class.getName());
 
     private final AlumniProfileRepository profileRepository;
 
@@ -83,9 +88,11 @@ public class AlumniDirectoryService {
             return AlumniDirectoryResult.success(
                     "Alumni directory retrieved successfully.", list);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error retrieving alumni directory", e);
             return AlumniDirectoryResult.failure(
-                    "Database error while retrieving alumni directory: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while retrieving alumni directory"));
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error retrieving alumni directory", e);
             return AlumniDirectoryResult.failure(
                     "Unexpected error while retrieving alumni directory: " + e.getMessage());
         }
@@ -123,6 +130,9 @@ public class AlumniDirectoryService {
         }
 
         String trimmedKeyword = keyword.trim();
+        if (trimmedKeyword.length() > 100) {
+            return AlumniDirectoryResult.failure("Search keyword cannot exceed 100 characters.");
+        }
 
         // 4. Database search
         try {
@@ -134,9 +144,11 @@ public class AlumniDirectoryService {
             return AlumniDirectoryResult.success(
                     "Found " + list.size() + " alumni matching '" + trimmedKeyword + "'.", list);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error searching alumni", e);
             return AlumniDirectoryResult.failure(
-                    "Database error while searching alumni: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while searching alumni"));
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error searching alumni", e);
             return AlumniDirectoryResult.failure(
                     "Unexpected error while searching alumni: " + e.getMessage());
         }
@@ -184,9 +196,11 @@ public class AlumniDirectoryService {
             return AlumniDirectoryResult.success(
                     "Found " + list.size() + " matching alumni for selected filters.", list);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error filtering alumni", e);
             return AlumniDirectoryResult.failure(
-                    "Database error while filtering alumni: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while filtering alumni"));
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error filtering alumni", e);
             return AlumniDirectoryResult.failure(
                     "Unexpected error while filtering alumni: " + e.getMessage());
         }
@@ -234,9 +248,11 @@ public class AlumniDirectoryService {
             return AlumniDirectoryResult.success(
                     "Alumni profile retrieved successfully.", List.of(alumni.get()));
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error retrieving alumni profile for ID: " + alumniId, e);
             return AlumniDirectoryResult.failure(
-                    "Database error while retrieving alumni profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while retrieving alumni profile"));
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error retrieving alumni profile for ID: " + alumniId, e);
             return AlumniDirectoryResult.failure(
                     "Unexpected error while retrieving alumni profile: " + e.getMessage());
         }

@@ -114,6 +114,9 @@ public class UserSession {
      * @throws SecurityException if not logged in or role does not match
      */
     public void requireRole(Role requiredRole) {
+        if (requiredRole == null) {
+            throw new IllegalArgumentException("Required role must not be null.");
+        }
         if (!isLoggedIn()) {
             throw new SecurityException("Unauthorized: No user is currently logged in.");
         }

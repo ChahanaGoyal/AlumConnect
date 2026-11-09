@@ -123,6 +123,9 @@ public final class PasswordUtil {
                 return errors;
             }
         }
+        if (password.length() > 128) {
+            errors.add("Password cannot exceed 128 characters.");
+        }
         if (!UPPERCASE_PATTERN.matcher(password).find()) {
             errors.add("Password must contain at least one uppercase letter (A-Z).");
         }

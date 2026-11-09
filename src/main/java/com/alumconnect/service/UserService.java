@@ -16,12 +16,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Service orchestrating user registration, validation, password security,
  * and profile management for Student and Alumni accounts.
  */
 public class UserService {
+
+    private static final Logger LOGGER = Logger.getLogger(UserService.class.getName());
 
     private final UserRepository userRepository;
 
@@ -74,7 +78,8 @@ public class UserService {
                 return RegistrationResult.failure("An account with email '" + request.getEmail().trim() + "' already exists.");
             }
         } catch (SQLException e) {
-            return RegistrationResult.failure("Database error while checking email availability: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error while checking email availability", e);
+            return RegistrationResult.failure(ValidationUtil.formatDatabaseErrorMessage(e, "Database error while checking email availability"));
         }
 
         // 3. Password hashing
@@ -100,6 +105,7 @@ public class UserService {
                 return RegistrationResult.failure("Registration is only supported for STUDENT and ALUMNI roles.");
             }
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error during registration", e);
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("duplicate") || msg.contains("unique")) {
                 if (msg.contains("email")) {
@@ -109,8 +115,9 @@ public class UserService {
                 }
                 return RegistrationResult.failure("A record with these unique details already exists.");
             }
-            return RegistrationResult.failure("Database error during registration: " + e.getMessage());
+            return RegistrationResult.failure(ValidationUtil.formatDatabaseErrorMessage(e, "Database error during registration"));
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error during registration", e);
             return RegistrationResult.failure("Unexpected error during registration: " + e.getMessage());
         }
     }
@@ -136,9 +143,13 @@ public class UserService {
      * Finds a user by ID.
      */
     public Optional<User> getUserById(int id) {
+        if (id <= 0) {
+            return Optional.empty();
+        }
         try {
             return userRepository.findById(id);
         } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "Database error retrieving user by ID: " + id, e);
             return Optional.empty();
         }
     }
@@ -147,9 +158,13 @@ public class UserService {
      * Finds a user by email.
      */
     public Optional<User> getUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return Optional.empty();
+        }
         try {
-            return userRepository.findByEmail(email);
+            return userRepository.findByEmail(email.trim());
         } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "Database error retrieving user by email: " + email, e);
             return Optional.empty();
         }
     }
@@ -201,8 +216,11 @@ public class UserService {
                     user
             );
         } catch (SQLException e) {
-            return com.alumconnect.service.dto.LoginResult.failure("Database error during authentication: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error during authentication", e);
+            return com.alumconnect.service.dto.LoginResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error during authentication"));
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Unexpected error during authentication", e);
             return com.alumconnect.service.dto.LoginResult.failure("Unexpected error during authentication: " + e.getMessage());
         }
     }
@@ -295,8 +313,12 @@ public class UserService {
         if (request.getEnrollmentNumber() != null && request.getEnrollmentNumber().trim().length() > 50) {
             errors.add("Enrollment number cannot exceed 50 characters.");
         }
-        if (request.getLinkedinUrl() != null && request.getLinkedinUrl().trim().length() > 255) {
-            errors.add("LinkedIn URL cannot exceed 255 characters.");
+        if (request.getLinkedinUrl() != null && !request.getLinkedinUrl().isBlank()) {
+            if (request.getLinkedinUrl().trim().length() > 255) {
+                errors.add("LinkedIn URL cannot exceed 255 characters.");
+            } else if (!ValidationUtil.isValidLinkedInUrl(request.getLinkedinUrl())) {
+                errors.add("Invalid LinkedIn URL format (expected https://linkedin.com/in/...).");
+            }
         }
         if (request.getGithubUrl() != null && request.getGithubUrl().trim().length() > 255) {
             errors.add("GitHub URL cannot exceed 255 characters.");
@@ -304,11 +326,19 @@ public class UserService {
     }
 
     private void validateAlumniFields(RegistrationRequest request, List<String> errors) {
-        if (request.getYearsOfExperience() != null && request.getYearsOfExperience() < 0) {
-            errors.add("Years of experience cannot be negative.");
+        if (request.getYearsOfExperience() != null) {
+            if (request.getYearsOfExperience() < 0) {
+                errors.add("Years of experience cannot be negative.");
+            } else if (request.getYearsOfExperience() > 70) {
+                errors.add("Years of experience cannot exceed 70.");
+            }
         }
-        if (request.getMaxMentees() != null && request.getMaxMentees() < 0) {
-            errors.add("Max mentees cannot be negative.");
+        if (request.getMaxMentees() != null) {
+            if (request.getMaxMentees() < 0) {
+                errors.add("Max mentees cannot be negative.");
+            } else if (request.getMaxMentees() > 100) {
+                errors.add("Max mentees cannot exceed 100.");
+            }
         }
         if (request.getCurrentCompany() != null && request.getCurrentCompany().trim().length() > 150) {
             errors.add("Current company cannot exceed 150 characters.");
@@ -319,8 +349,12 @@ public class UserService {
         if (request.getIndustry() != null && request.getIndustry().trim().length() > 100) {
             errors.add("Industry cannot exceed 100 characters.");
         }
-        if (request.getLinkedinUrl() != null && request.getLinkedinUrl().trim().length() > 255) {
-            errors.add("LinkedIn URL cannot exceed 255 characters.");
+        if (request.getLinkedinUrl() != null && !request.getLinkedinUrl().isBlank()) {
+            if (request.getLinkedinUrl().trim().length() > 255) {
+                errors.add("LinkedIn URL cannot exceed 255 characters.");
+            } else if (!ValidationUtil.isValidLinkedInUrl(request.getLinkedinUrl())) {
+                errors.add("Invalid LinkedIn URL format (expected https://linkedin.com/in/...).");
+            }
         }
     }
 

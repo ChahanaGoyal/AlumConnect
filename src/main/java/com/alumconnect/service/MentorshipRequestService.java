@@ -20,6 +20,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import com.alumconnect.util.ValidationUtil;
 
 /**
  * Service handling mentorship request operations across student and alumni lifecycles.
@@ -35,6 +38,8 @@ import java.util.Optional;
  * </ul>
  */
 public class MentorshipRequestService {
+
+    private static final Logger LOGGER = Logger.getLogger(MentorshipRequestService.class.getName());
 
     private final MentorshipRequestRepository requestRepository;
     private final UserRepository userRepository;
@@ -78,6 +83,9 @@ public class MentorshipRequestService {
         User user = sessionUser.get();
         if (user.getRole() != Role.STUDENT) {
             return MentorshipRequestResult.failure("Access denied: Only students can send mentorship requests.");
+        }
+        if (user.getId() == null || user.getId() <= 0) {
+            return MentorshipRequestResult.failure("Invalid user session. Please log in again.");
         }
         int studentId = user.getId();
         // 3. Basic input validation
@@ -142,7 +150,9 @@ public class MentorshipRequestService {
             return MentorshipRequestResult.success(requestId, "Mentorship request sent successfully.");
 
         } catch (SQLException e) {
-            return MentorshipRequestResult.failure("Database error while sending mentorship request: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error sending mentorship request", e);
+            return MentorshipRequestResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while sending mentorship request"));
         }
     }
 
@@ -187,7 +197,9 @@ public class MentorshipRequestService {
             List<MentorshipRequest> requests = requestRepository.findRequestsByAlumniId(alumniId);
             return MentorshipRequestResult.success(requests, "Retrieved " + requests.size() + " mentorship request(s).");
         } catch (SQLException e) {
-            return MentorshipRequestResult.failure("Database error while retrieving mentorship requests: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error retrieving received mentorship requests", e);
+            return MentorshipRequestResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while retrieving mentorship requests"));
         }
     }
 
@@ -264,7 +276,9 @@ public class MentorshipRequestService {
             List<MentorshipRequest> requests = requestRepository.findRequestsByStudentId(studentId);
             return MentorshipRequestResult.success(requests, "Retrieved " + requests.size() + " mentorship request(s).");
         } catch (SQLException e) {
-            return MentorshipRequestResult.failure("Database error while retrieving mentorship requests: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error retrieving sent mentorship requests", e);
+            return MentorshipRequestResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while retrieving mentorship requests"));
         }
     }
 
@@ -341,7 +355,9 @@ public class MentorshipRequestService {
             List<MentorshipRequest> connections = requestRepository.findAcceptedConnectionsByStudentId(studentId);
             return MentorshipRequestResult.success(connections, "Retrieved " + connections.size() + " active mentorship connection(s).");
         } catch (SQLException e) {
-            return MentorshipRequestResult.failure("Database error while retrieving mentorship connections: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error retrieving student mentorship connections", e);
+            return MentorshipRequestResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while retrieving mentorship connections"));
         }
     }
 
@@ -386,7 +402,9 @@ public class MentorshipRequestService {
             List<MentorshipRequest> connections = requestRepository.findAcceptedConnectionsByAlumniId(alumniId);
             return MentorshipRequestResult.success(connections, "Retrieved " + connections.size() + " active mentorship connection(s).");
         } catch (SQLException e) {
-            return MentorshipRequestResult.failure("Database error while retrieving mentorship connections: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error retrieving alumni mentorship connections", e);
+            return MentorshipRequestResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while retrieving mentorship connections"));
         }
     }
 
@@ -493,6 +511,9 @@ public class MentorshipRequestService {
      * Accepts a pending mentorship request verifying the given alumniId.
      */
     public MentorshipRequestResult acceptRequest(int requestId, int alumniId) {
+        if (alumniId <= 0) {
+            return MentorshipRequestResult.failure("Invalid alumni ID: ID must be a positive integer.");
+        }
         Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
         if (sessionUser.isPresent() && (sessionUser.get().getId() == null || sessionUser.get().getId() != alumniId)) {
             return MentorshipRequestResult.failure("Access denied: You can only respond to mentorship requests sent to you.");
@@ -504,6 +525,9 @@ public class MentorshipRequestService {
      * Rejects a pending mentorship request verifying the given alumniId.
      */
     public MentorshipRequestResult rejectRequest(int requestId, int alumniId) {
+        if (alumniId <= 0) {
+            return MentorshipRequestResult.failure("Invalid alumni ID: ID must be a positive integer.");
+        }
         Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
         if (sessionUser.isPresent() && (sessionUser.get().getId() == null || sessionUser.get().getId() != alumniId)) {
             return MentorshipRequestResult.failure("Access denied: You can only respond to mentorship requests sent to you.");
@@ -530,7 +554,7 @@ public class MentorshipRequestService {
         }
 
         // 4. Status validation argument check
-        if (newStatus != MentorshipStatus.ACCEPTED && newStatus != MentorshipStatus.REJECTED) {
+        if (newStatus == null || (newStatus != MentorshipStatus.ACCEPTED && newStatus != MentorshipStatus.REJECTED)) {
             return MentorshipRequestResult.failure("Invalid status transition: Can only transition to ACCEPTED or REJECTED.");
         }
 
@@ -569,7 +593,9 @@ public class MentorshipRequestService {
             return MentorshipRequestResult.success(requestId, "Mentorship request " + actionWord + " successfully.");
 
         } catch (SQLException e) {
-            return MentorshipRequestResult.failure("Database error while responding to mentorship request: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Database error responding to mentorship request", e);
+            return MentorshipRequestResult.failure(
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while responding to mentorship request"));
         }
     }
 }

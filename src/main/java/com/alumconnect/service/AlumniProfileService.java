@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Service handling alumni professional profile viewing, creation, and editing operations.
@@ -31,6 +33,8 @@ import java.util.Optional;
  * experience, max mentees, and field lengths.
  */
 public class AlumniProfileService {
+
+    private static final Logger LOGGER = Logger.getLogger(AlumniProfileService.class.getName());
 
     private final AlumniProfileRepository profileRepository;
 
@@ -75,6 +79,9 @@ public class AlumniProfileService {
             return AlumniProfileResult.failure(
                     "Access denied: Only alumni can access alumni profiles.");
         }
+        if (user.getId() == null || user.getId() <= 0) {
+            return AlumniProfileResult.failure("Invalid user session. Please log in again.");
+        }
 
         // 2. Load from DB using session userId (ownership guaranteed)
         try {
@@ -86,8 +93,9 @@ public class AlumniProfileService {
             }
             return AlumniProfileResult.success("Profile loaded successfully.", alumniOpt.get());
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error loading alumni profile", e);
             return AlumniProfileResult.failure(
-                    "Database error while loading your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while loading your profile"));
         }
     }
 
@@ -116,6 +124,9 @@ public class AlumniProfileService {
             return AlumniProfileResult.failure(
                     "Access denied: Only alumni can create alumni profiles.");
         }
+        if (user.getId() == null || user.getId() <= 0) {
+            return AlumniProfileResult.failure("Invalid user session. Please log in again.");
+        }
 
         // 2. Validation
         List<String> errors = validateProfileRequest(request);
@@ -131,8 +142,9 @@ public class AlumniProfileService {
                         "A profile already exists for your account. Please update it instead.");
             }
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error checking profile status", e);
             return AlumniProfileResult.failure(
-                    "Database error while checking profile status: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while checking profile status"));
         }
 
         // 4. Create Alumni entity and populate
@@ -154,13 +166,14 @@ public class AlumniProfileService {
             return AlumniProfileResult.success(
                     "Your profile has been created successfully.", alumni);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error creating alumni profile", e);
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("duplicate") || msg.contains("unique")) {
                 return AlumniProfileResult.failure(
                         "A profile with these unique details already exists.");
             }
             return AlumniProfileResult.failure(
-                    "Database error while creating your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while creating your profile"));
         }
     }
 
@@ -190,6 +203,9 @@ public class AlumniProfileService {
             return AlumniProfileResult.failure(
                     "Access denied: Only alumni can update alumni profiles.");
         }
+        if (user.getId() == null || user.getId() <= 0) {
+            return AlumniProfileResult.failure("Invalid user session. Please log in again.");
+        }
 
         // 2. Validation
         List<String> errors = validateProfileRequest(request);
@@ -208,8 +224,9 @@ public class AlumniProfileService {
             }
             existing = existingOpt.get();
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error loading alumni profile for update", e);
             return AlumniProfileResult.failure(
-                    "Database error while loading your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while loading your profile"));
         }
 
         // 4. Apply validated request fields onto the existing model
@@ -225,13 +242,14 @@ public class AlumniProfileService {
             return AlumniProfileResult.success(
                     "Your profile has been updated successfully.", existing);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error updating alumni profile", e);
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("duplicate") || msg.contains("unique")) {
                 return AlumniProfileResult.failure(
                         "A profile with these unique details already exists.");
             }
             return AlumniProfileResult.failure(
-                    "Database error while updating your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while updating your profile"));
         }
     }
 
@@ -287,20 +305,31 @@ public class AlumniProfileService {
             errors.add("Industry cannot exceed 100 characters.");
         }
 
-        // Years of experience (optional, non-negative)
-        if (request.getYearsOfExperience() != null && request.getYearsOfExperience() < 0) {
-            errors.add("Years of experience cannot be negative.");
+        // Years of experience (optional, non-negative, sensible max)
+        if (request.getYearsOfExperience() != null) {
+            if (request.getYearsOfExperience() < 0) {
+                errors.add("Years of experience cannot be negative.");
+            } else if (request.getYearsOfExperience() > 70) {
+                errors.add("Years of experience cannot exceed 70.");
+            }
         }
 
-        // Max mentees (optional, non-negative)
-        if (request.getMaxMentees() != null && request.getMaxMentees() < 0) {
-            errors.add("Max mentees cannot be negative.");
+        // Max mentees (optional, non-negative, sensible max)
+        if (request.getMaxMentees() != null) {
+            if (request.getMaxMentees() < 0) {
+                errors.add("Max mentees cannot be negative.");
+            } else if (request.getMaxMentees() > 100) {
+                errors.add("Max mentees cannot exceed 100.");
+            }
         }
 
-        // LinkedIn URL (optional, length check)
-        if (request.getLinkedinUrl() != null && !request.getLinkedinUrl().isBlank()
-                && request.getLinkedinUrl().trim().length() > 255) {
-            errors.add("LinkedIn URL cannot exceed 255 characters.");
+        // LinkedIn URL (optional, length check + format check)
+        if (request.getLinkedinUrl() != null && !request.getLinkedinUrl().isBlank()) {
+            if (request.getLinkedinUrl().trim().length() > 255) {
+                errors.add("LinkedIn URL cannot exceed 255 characters.");
+            } else if (!ValidationUtil.isValidLinkedInUrl(request.getLinkedinUrl())) {
+                errors.add("Invalid LinkedIn URL format (expected https://linkedin.com/in/...).");
+            }
         }
 
         return errors;

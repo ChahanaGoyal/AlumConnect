@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Service handling student profile viewing and editing operations.
@@ -31,6 +33,8 @@ import java.util.Optional;
  * consistent with registration validation in {@link UserService}.
  */
 public class StudentProfileService {
+
+    private static final Logger LOGGER = Logger.getLogger(StudentProfileService.class.getName());
 
     private final StudentProfileRepository profileRepository;
 
@@ -75,6 +79,9 @@ public class StudentProfileService {
             return StudentProfileResult.failure(
                     "Access denied: Only students can access student profiles.");
         }
+        if (user.getId() == null || user.getId() <= 0) {
+            return StudentProfileResult.failure("Invalid user session. Please log in again.");
+        }
 
         // 2. Load from DB using session userId (ownership guaranteed)
         try {
@@ -86,8 +93,9 @@ public class StudentProfileService {
             }
             return StudentProfileResult.success("Profile loaded successfully.", studentOpt.get());
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error while loading student profile", e);
             return StudentProfileResult.failure(
-                    "Database error while loading your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while loading your profile"));
         }
     }
 
@@ -116,6 +124,9 @@ public class StudentProfileService {
             return StudentProfileResult.failure(
                     "Access denied: Only students can create student profiles.");
         }
+        if (user.getId() == null || user.getId() <= 0) {
+            return StudentProfileResult.failure("Invalid user session. Please log in again.");
+        }
 
         // 2. Validation
         List<String> errors = validateProfileRequest(request);
@@ -131,8 +142,9 @@ public class StudentProfileService {
                         "A profile already exists for your account. Please update it instead.");
             }
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error checking profile status", e);
             return StudentProfileResult.failure(
-                    "Database error while checking profile status: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while checking profile status"));
         }
 
         // 4. Create Student entity and populate
@@ -154,6 +166,7 @@ public class StudentProfileService {
             return StudentProfileResult.success(
                     "Your profile has been created successfully.", student);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error creating student profile", e);
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("duplicate") || msg.contains("unique")) {
                 if (msg.contains("enrollment_number")) {
@@ -165,7 +178,7 @@ public class StudentProfileService {
                         "A record with these unique details already exists.");
             }
             return StudentProfileResult.failure(
-                    "Database error while creating your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while creating your profile"));
         }
     }
 
@@ -195,6 +208,9 @@ public class StudentProfileService {
             return StudentProfileResult.failure(
                     "Access denied: Only students can update student profiles.");
         }
+        if (user.getId() == null || user.getId() <= 0) {
+            return StudentProfileResult.failure("Invalid user session. Please log in again.");
+        }
 
         // 2. Validation
         List<String> errors = validateProfileRequest(request);
@@ -213,8 +229,9 @@ public class StudentProfileService {
             }
             existing = existingOpt.get();
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error loading student profile for update", e);
             return StudentProfileResult.failure(
-                    "Database error while loading your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while loading your profile"));
         }
 
         // 4. Apply validated request fields onto the existing model
@@ -230,6 +247,7 @@ public class StudentProfileService {
             return StudentProfileResult.success(
                     "Your profile has been updated successfully.", existing);
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Database error updating student profile", e);
             String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
             if (msg.contains("duplicate") || msg.contains("unique")) {
                 if (msg.contains("enrollment_number")) {
@@ -241,7 +259,7 @@ public class StudentProfileService {
                         "A record with these unique details already exists.");
             }
             return StudentProfileResult.failure(
-                    "Database error while updating your profile: " + e.getMessage());
+                    ValidationUtil.formatDatabaseErrorMessage(e, "Database error while updating your profile"));
         }
     }
 
@@ -293,11 +311,13 @@ public class StudentProfileService {
             errors.add("Enrollment number cannot exceed 50 characters.");
         }
 
-        // LinkedIn URL (optional, length check)
-        if (request.getLinkedinUrl() != null &&
-                !request.getLinkedinUrl().isBlank() &&
-                request.getLinkedinUrl().trim().length() > 255) {
-            errors.add("LinkedIn URL cannot exceed 255 characters.");
+        // LinkedIn URL (optional, length check + format check)
+        if (request.getLinkedinUrl() != null && !request.getLinkedinUrl().isBlank()) {
+            if (request.getLinkedinUrl().trim().length() > 255) {
+                errors.add("LinkedIn URL cannot exceed 255 characters.");
+            } else if (!ValidationUtil.isValidLinkedInUrl(request.getLinkedinUrl())) {
+                errors.add("Invalid LinkedIn URL format (expected https://linkedin.com/in/...).");
+            }
         }
 
         // GitHub URL (optional, length check)

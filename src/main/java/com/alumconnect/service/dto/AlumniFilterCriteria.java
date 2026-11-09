@@ -109,8 +109,21 @@ public class AlumniFilterCriteria {
                         Alumni.MIN_GRAD_YEAR + " and " + Alumni.MAX_GRAD_YEAR + ".");
             }
         }
-        if (minExperience != null && minExperience < 0) {
-            errors.add("Years of experience cannot be negative.");
+        if (minExperience != null) {
+            if (minExperience < 0) {
+                errors.add("Years of experience cannot be negative.");
+            } else if (minExperience > 70) {
+                errors.add("Years of experience cannot exceed 70.");
+            }
+        }
+        if (industry != null && industry.length() > 100) {
+            errors.add("Industry cannot exceed 100 characters.");
+        }
+        if (department != null && department.length() > 100) {
+            errors.add("Department cannot exceed 100 characters.");
+        }
+        if (degree != null && degree.length() > 100) {
+            errors.add("Degree cannot exceed 100 characters.");
         }
         return errors;
     }

@@ -31,6 +31,7 @@ import java.util.Optional;
  *   <li>Accepting pending mentorship requests (Alumni role - Prompt 17)</li>
  *   <li>Rejecting pending mentorship requests (Alumni role - Prompt 17)</li>
  *   <li>Retrieving sent mentorship requests (Student role - Prompt 18)</li>
+ *   <li>Retrieving accepted mentorship connections (Student & Alumni roles - Prompt 19)</li>
  * </ul>
  */
 public class MentorshipRequestService {
@@ -101,6 +102,7 @@ public class MentorshipRequestService {
         if (studentId == alumniId) {
             return MentorshipRequestResult.failure("You cannot send a mentorship request to yourself.");
         }
+
         try {
             // 5. Verify target exists and is an alumni
             Optional<Alumni> alumniOpt = userRepository.findAlumniById(alumniId);
@@ -108,31 +110,37 @@ public class MentorshipRequestService {
                 return MentorshipRequestResult.failure("Target user does not exist or is not an alumni.");
             }
             Alumni alumni = alumniOpt.get();
+
             // 6. Duplicate pending request
             if (requestRepository.existsPending(studentId, alumniId)) {
                 return MentorshipRequestResult.failure("A pending mentorship request already exists.");
             }
+
             // 7. Duplicate accepted request
             if (requestRepository.existsAccepted(studentId, alumniId)) {
                 return MentorshipRequestResult.failure("You already have an accepted mentorship request with this alumni.");
             }
+
             // 8. Alumni mentorship availability
             if (!requestRepository.isAlumniAvailable(alumniId)) {
                 return MentorshipRequestResult.failure("This alumni is currently not available for mentorship.");
             }
+
             // 9. Capacity check against max mentees
             int activeMentees = requestRepository.countActiveMentees(alumniId);
             int maxMentees = alumni.getMaxMentees();
             if (activeMentees >= maxMentees) {
                 return MentorshipRequestResult.failure("Alumni has reached the maximum number of mentees.");
             }
+
             // 10. Create request
             MentorshipRequestDto dto = new MentorshipRequestDto(studentId, alumniId, topic, message);
             int requestId = requestRepository.createRequest(dto);
             if (requestId <= 0) {
-                return MentorshipRequestResult.failure("Could not create mentorship request. Please try again.");
+                return MentorshipRequestResult.failure("Failed to create mentorship request.");
             }
             return MentorshipRequestResult.success(requestId, "Mentorship request sent successfully.");
+
         } catch (SQLException e) {
             return MentorshipRequestResult.failure("Database error while sending mentorship request: " + e.getMessage());
         }
@@ -283,6 +291,159 @@ public class MentorshipRequestService {
      */
     public List<MentorshipRequest> getStudentRequests(int studentId) {
         MentorshipRequestResult result = getRequestsForStudent(studentId);
+        if (!result.isSuccess()) {
+            if (result.getMessage().startsWith("Access denied")) {
+                throw new SecurityException(result.getMessage());
+            }
+            throw new IllegalArgumentException(result.getMessage());
+        }
+        return result.getRequests();
+    }
+
+    /**
+     * Retrieves accepted mentorship connections for the specified student.
+     *
+     * <p>Security invariants:
+     * <ul>
+     *   <li>User must be authenticated.</li>
+     *   <li>User must have the {@link Role#STUDENT} role.</li>
+     *   <li>User can only view their own connections (studentId must match session user ID).</li>
+     * </ul>
+     *
+     * @param studentId target student user ID
+     * @return {@link MentorshipRequestResult} carrying the list of accepted connections on success, or an error message on failure
+     */
+    public MentorshipRequestResult getConnectionsForStudent(int studentId) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return MentorshipRequestResult.failure("Access denied: You must be logged in to view mentorship connections.");
+        }
+
+        // 2. Role check
+        User user = sessionUser.get();
+        if (user.getRole() != Role.STUDENT) {
+            return MentorshipRequestResult.failure("Access denied: Only students can view student mentorship connections.");
+        }
+
+        // 3. ID validation
+        if (studentId <= 0) {
+            return MentorshipRequestResult.failure("Invalid student ID: ID must be a positive integer.");
+        }
+
+        // 4. Ownership check: student can only view their own connections
+        if (user.getId() == null || user.getId() != studentId) {
+            return MentorshipRequestResult.failure("Access denied: You cannot view mentorship connections for another student.");
+        }
+
+        // 5. Query repository
+        try {
+            List<MentorshipRequest> connections = requestRepository.findAcceptedConnectionsByStudentId(studentId);
+            return MentorshipRequestResult.success(connections, "Retrieved " + connections.size() + " active mentorship connection(s).");
+        } catch (SQLException e) {
+            return MentorshipRequestResult.failure("Database error while retrieving mentorship connections: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Retrieves accepted mentorship connections for the specified alumnus.
+     *
+     * <p>Security invariants:
+     * <ul>
+     *   <li>User must be authenticated.</li>
+     *   <li>User must have the {@link Role#ALUMNI} role.</li>
+     *   <li>User can only view their own connections (alumniId must match session user ID).</li>
+     * </ul>
+     *
+     * @param alumniId target alumni user ID
+     * @return {@link MentorshipRequestResult} carrying the list of accepted connections on success, or an error message on failure
+     */
+    public MentorshipRequestResult getConnectionsForAlumni(int alumniId) {
+        // 1. Authentication check
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return MentorshipRequestResult.failure("Access denied: You must be logged in to view mentorship connections.");
+        }
+
+        // 2. Role check
+        User user = sessionUser.get();
+        if (user.getRole() != Role.ALUMNI) {
+            return MentorshipRequestResult.failure("Access denied: Only alumni can view alumni mentorship connections.");
+        }
+
+        // 3. ID validation
+        if (alumniId <= 0) {
+            return MentorshipRequestResult.failure("Invalid alumni ID: ID must be a positive integer.");
+        }
+
+        // 4. Ownership check: alumnus can only view their own connections
+        if (user.getId() == null || user.getId() != alumniId) {
+            return MentorshipRequestResult.failure("Access denied: You cannot view mentorship connections for another alumnus.");
+        }
+
+        // 5. Query repository
+        try {
+            List<MentorshipRequest> connections = requestRepository.findAcceptedConnectionsByAlumniId(alumniId);
+            return MentorshipRequestResult.success(connections, "Retrieved " + connections.size() + " active mentorship connection(s).");
+        } catch (SQLException e) {
+            return MentorshipRequestResult.failure("Database error while retrieving mentorship connections: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Convenience method to retrieve accepted mentorship connections for the currently logged-in user (Student or Alumni).
+     *
+     * @return result containing list of accepted connections on success, or error message on failure
+     */
+    public MentorshipRequestResult getMyMentorshipConnections() {
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return MentorshipRequestResult.failure("Access denied: You must be logged in to view your mentorship connections.");
+        }
+
+        User user = sessionUser.get();
+        if (user.getId() == null || user.getId() <= 0) {
+            return MentorshipRequestResult.failure("Invalid user ID in session.");
+        }
+
+        if (user.getRole() == Role.STUDENT) {
+            return getConnectionsForStudent(user.getId());
+        } else if (user.getRole() == Role.ALUMNI) {
+            return getConnectionsForAlumni(user.getId());
+        } else {
+            return MentorshipRequestResult.failure("Access denied: Unauthorized role for mentorship connections.");
+        }
+    }
+
+    /**
+     * Direct list-returning method for student mentorship connections.
+     *
+     * @param studentId target student user ID
+     * @return list of MentorshipRequest objects
+     * @throws SecurityException if unauthorized
+     * @throws IllegalArgumentException if ID is invalid
+     */
+    public List<MentorshipRequest> getStudentConnections(int studentId) {
+        MentorshipRequestResult result = getConnectionsForStudent(studentId);
+        if (!result.isSuccess()) {
+            if (result.getMessage().startsWith("Access denied")) {
+                throw new SecurityException(result.getMessage());
+            }
+            throw new IllegalArgumentException(result.getMessage());
+        }
+        return result.getRequests();
+    }
+
+    /**
+     * Direct list-returning method for alumni mentorship connections.
+     *
+     * @param alumniId target alumni user ID
+     * @return list of MentorshipRequest objects
+     * @throws SecurityException if unauthorized
+     * @throws IllegalArgumentException if ID is invalid
+     */
+    public List<MentorshipRequest> getAlumniConnections(int alumniId) {
+        MentorshipRequestResult result = getConnectionsForAlumni(alumniId);
         if (!result.isSuccess()) {
             if (result.getMessage().startsWith("Access denied")) {
                 throw new SecurityException(result.getMessage());

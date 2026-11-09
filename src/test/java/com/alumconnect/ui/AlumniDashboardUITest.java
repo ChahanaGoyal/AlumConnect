@@ -528,13 +528,145 @@ class AlumniDashboardUITest {
                 "Unauthenticated session must throw SecurityException when calling viewMentorshipRequests");
     }
 
+    // ── Prompt 19: Mentorship Connections / My Mentees Tests ─────────────────
+
+    @Test
+    @DisplayName("Menu option 3 My Mentees appears in alumni dashboard header")
+    void testOptionMyMenteesAppearsInAlumniDashboardMenu() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        AlumniDashboardUI dashboard = buildDashboard("0\n", capture);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[3] My Mentees"),
+                "Dashboard menu must offer '[3] My Mentees'.");
+    }
+
+    @Test
+    @DisplayName("Menu option 3 displays accepted mentees with student details")
+    void testOptionMyMenteesDisplaysAcceptedMentees() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        FakeMentorshipRequestRepository fakeRepo = new FakeMentorshipRequestRepository();
+
+        // Accepted mentee
+        MentorshipRequest mentee = new MentorshipRequest(student.getId(), alumni.getId(),
+                "Compiler Design", "Mentoring request details");
+        mentee.setId(201);
+        mentee.setStatus(MentorshipStatus.ACCEPTED);
+        mentee.setStudentName("Anshika Singh");
+        mentee.setStudentEmail("student@thapar.edu");
+        mentee.setStudentDegree("B.Tech");
+        mentee.setStudentDepartment("Computer Science");
+        mentee.setStudentGraduationYear(2026);
+        mentee.setRespondedAt(LocalDateTime.now());
+        fakeRepo.addRequest(mentee);
+
+        // Pending request (should not appear in mentees list)
+        MentorshipRequest pending = new MentorshipRequest(99, alumni.getId(),
+                "Other Topic", "Other Msg");
+        pending.setId(202);
+        pending.setStatus(MentorshipStatus.PENDING);
+        fakeRepo.addRequest(pending);
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        MentorshipRequestService reqService = new MentorshipRequestService(fakeRepo, userRepo);
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("3\n", reqService, capture);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("MY MENTEES"));
+        assertTrue(output.contains("Anshika Singh"));
+        assertTrue(output.contains("student@thapar.edu"));
+        assertTrue(output.contains("Computer Science"));
+        assertTrue(output.contains("Class of 2026"));
+        assertTrue(output.contains("Compiler Design"));
+        assertTrue(output.contains("End of Mentees List."));
+        assertTrue(output.contains("Returning to Alumni Dashboard."));
+        assertFalse(output.contains("Other Topic"), "Pending requests must not appear in mentees list.");
+    }
+
+    @Test
+    @DisplayName("Menu option 3 displays empty state when alumni has no accepted mentees")
+    void testOptionMyMenteesEmptyState() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        FakeMentorshipRequestRepository fakeRepo = new FakeMentorshipRequestRepository(); // Empty
+        MentorshipRequestService reqService = new MentorshipRequestService(fakeRepo, userRepo);
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("3\n", reqService, capture);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("MY MENTEES"));
+        assertTrue(output.contains("[INFO] You have no active mentees yet."));
+        assertTrue(output.contains("Returning to Alumni Dashboard."));
+    }
+
+    @Test
+    @DisplayName("Menu option 3 displays error when database error occurs")
+    void testOptionMyMenteesDatabaseError() {
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        FakeMentorshipRequestRepository fakeRepo = new FakeMentorshipRequestRepository();
+        fakeRepo.setThrowOnQuery(true);
+        MentorshipRequestService reqService = new MentorshipRequestService(fakeRepo, userRepo);
+        AlumniDashboardUI dashboard = buildDashboardWithMentorship("3\n", reqService, capture);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR]"));
+        assertTrue(output.contains("Database error"));
+    }
+
+    @Test
+    @DisplayName("Student cannot invoke viewMyMentees or handleMyMentees")
+    void testStudentCannotAccessMyMenteesUI() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        AlumniDashboardUI dashboard = buildDashboard("", new ByteArrayOutputStream());
+        assertThrows(SecurityException.class, dashboard::viewMyMentees,
+                "Student role must throw SecurityException when calling viewMyMentees");
+        assertThrows(SecurityException.class, dashboard::handleMyMentees,
+                "Student role must throw SecurityException when calling handleMyMentees");
+    }
+
+    @Test
+    @DisplayName("Unauthenticated user cannot invoke viewMyMentees or handleMyMentees")
+    void testUnauthenticatedCannotAccessMyMenteesUI() {
+        AlumniDashboardUI dashboard = buildDashboard("", new ByteArrayOutputStream());
+        assertThrows(SecurityException.class, dashboard::viewMyMentees,
+                "Unauthenticated session must throw SecurityException when calling viewMyMentees");
+        assertThrows(SecurityException.class, dashboard::handleMyMentees,
+                "Unauthenticated session must throw SecurityException when calling handleMyMentees");
+    }
+
     // ── In-memory fakes ───────────────────────────────────────────────────────
 
     private static class FakeMentorshipRequestRepository implements MentorshipRequestRepository {
         private final Map<Integer, MentorshipRequest> requests = new HashMap<>();
 
+        private boolean throwOnQuery = false;
+
+        void setThrowOnQuery(boolean val) { this.throwOnQuery = val; }
+
         void addRequest(MentorshipRequest req) {
             requests.put(req.getId(), req);
+        }
+
+        @Override
+        public List<MentorshipRequest> findAcceptedConnectionsByAlumniId(int alumniId) throws SQLException {
+            if (throwOnQuery) throw new SQLException("Simulated DB query error");
+            return requests.values().stream()
+                    .filter(r -> r.getAlumniId() == alumniId && r.getStatus() == MentorshipStatus.ACCEPTED)
+                    .toList();
         }
 
         @Override

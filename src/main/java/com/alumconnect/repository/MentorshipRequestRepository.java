@@ -75,6 +75,30 @@ public interface MentorshipRequestRepository {
     }
 
     /**
+     * Retrieves accepted mentorship connections for the specified student,
+     * joined with alumni and alumni_profiles details.
+     *
+     * @param studentId the student user ID
+     * @return list of MentorshipRequest objects with status ACCEPTED
+     * @throws SQLException on database error
+     */
+    default List<MentorshipRequest> findAcceptedConnectionsByStudentId(int studentId) throws SQLException {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Retrieves accepted mentorship connections for the specified alumnus,
+     * joined with student and student_profiles details.
+     *
+     * @param alumniId the target alumnus user ID
+     * @return list of MentorshipRequest objects with status ACCEPTED
+     * @throws SQLException on database error
+     */
+    default List<MentorshipRequest> findAcceptedConnectionsByAlumniId(int alumniId) throws SQLException {
+        return Collections.emptyList();
+    }
+
+    /**
      * Updates the status and responded_at timestamp for a mentorship request.
      *
      * @param requestId   the request ID to update
@@ -98,6 +122,14 @@ public interface MentorshipRequestRepository {
 
     default Optional<MentorshipRequest> findById(int requestId) throws SQLException {
         return findRequestById(requestId);
+    }
+
+    default List<MentorshipRequest> findConnectionsByStudentId(int studentId) throws SQLException {
+        return findAcceptedConnectionsByStudentId(studentId);
+    }
+
+    default List<MentorshipRequest> findConnectionsByAlumniId(int alumniId) throws SQLException {
+        return findAcceptedConnectionsByAlumniId(alumniId);
     }
 
     default boolean updateStatus(int requestId, MentorshipStatus newStatus, LocalDateTime respondedAt) throws SQLException {

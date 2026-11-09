@@ -60,6 +60,8 @@ public class StudentDashboardUI {
     public static final String OPTION_FILTER_ALUMNI = "4";
     /** Menu option: view sent mentorship requests and status tracking (Prompt 18). */
     public static final String OPTION_MY_REQUESTS   = "5";
+    /** Menu option: view accepted mentorship connections (Prompt 19). */
+    public static final String OPTION_MY_CONNECTIONS = "6";
     /** Menu option: log the student out. */
     public static final String OPTION_LOGOUT        = "9";
     /** Menu option: exit the application. */
@@ -262,6 +264,7 @@ public class StudentDashboardUI {
         out.println("  [" + OPTION_SEARCH_ALUMNI + "] Search Alumni");
         out.println("  [" + OPTION_FILTER_ALUMNI + "] Filter Alumni");
         out.println("  [" + OPTION_MY_REQUESTS   + "] My Mentorship Requests");
+        out.println("  [" + OPTION_MY_CONNECTIONS+ "] My Mentorship Connections");
         out.println("  [" + OPTION_LOGOUT        + "] Logout");
         out.println("  [" + OPTION_EXIT          + "] Exit");
         out.println("--------------------------------------------------");
@@ -290,6 +293,7 @@ public class StudentDashboardUI {
             case OPTION_SEARCH_ALUMNI -> handleSearchAlumni();
             case OPTION_FILTER_ALUMNI -> handleFilterAlumni();
             case OPTION_MY_REQUESTS, "M", "REQUESTS" -> handleMyMentorshipRequests(student);
+            case OPTION_MY_CONNECTIONS, "C", "CONNECTIONS" -> handleMyMentorshipConnections(student);
             case OPTION_LOGOUT        -> handleLogout();
             case OPTION_EXIT          -> {
                 out.println("\n[AlumConnect] Goodbye! Thank you for using AlumConnect.");
@@ -419,6 +423,98 @@ public class StudentDashboardUI {
         }
         if (req.getResponseNotes() != null && !req.getResponseNotes().isBlank()) {
             out.println("   Response Note: " + req.getResponseNotes());
+        }
+        out.println("--------------------------------------------------");
+    }
+
+    // ── My Mentorship Connections (Prompt 19) ─────────────────────────────────
+
+    /**
+     * Programmatic entry point for viewing accepted mentorship connections.
+     *
+     * @throws SecurityException if active session is unauthenticated or not a Student
+     */
+    public void viewMentorshipConnections() {
+        validateStudentSession();
+        User currentUser = UserSession.getInstance().getCurrentUser().orElseThrow(
+                () -> new SecurityException("Unauthorized: session user is missing."));
+        if (currentUser instanceof Student student) {
+            handleMyMentorshipConnections(student);
+        } else {
+            throw new SecurityException("Access Denied: Current user is not a Student.");
+        }
+    }
+
+    /**
+     * Retrieves and displays accepted mentorship connections for the current student.
+     *
+     * @param student the currently logged-in Student
+     */
+    public void handleMyMentorshipConnections(Student student) {
+        validateStudentSession();
+
+        out.println("\n==================================================");
+        out.println("            MY MENTORSHIP CONNECTIONS             ");
+        out.println("==================================================");
+
+        MentorshipRequestResult result = mentorshipRequestService.getConnectionsForStudent(student.getId());
+        if (!result.isSuccess()) {
+            out.println("[ERROR] " + result.getMessage());
+            out.println("==================================================");
+            return;
+        }
+
+        List<MentorshipRequest> connections = result.getRequests();
+        if (connections.isEmpty()) {
+            out.println("[INFO] You have no active mentorship connections yet.");
+            out.println("==================================================");
+            out.println("[AlumConnect] Returning to Student Dashboard.");
+            return;
+        }
+
+        out.println("Displaying " + connections.size() + " active mentorship connection(s):");
+        out.println("--------------------------------------------------");
+
+        for (int i = 0; i < connections.size(); i++) {
+            printStudentConnectionCard(i + 1, connections.get(i));
+        }
+
+        out.println("==================================================");
+        out.println("[INFO] End of Mentorship Connections.");
+        out.println("[AlumConnect] Returning to Student Dashboard.");
+    }
+
+    /**
+     * Convenience overload retrieving the session student automatically.
+     */
+    public void handleMyMentorshipConnections() {
+        validateStudentSession();
+        UserSession session = UserSession.getInstance();
+        User currentUser = session.getCurrentUser().orElseThrow(
+                () -> new SecurityException("Unauthorized: session user is missing."));
+        if (currentUser instanceof Student s) {
+            handleMyMentorshipConnections(s);
+        }
+    }
+
+    private void printStudentConnectionCard(int index, MentorshipRequest conn) {
+        out.println(index + ". Connection ID: " + conn.getId());
+        out.println("   Mentor Name  : " + safeString(conn.getAlumniName())
+                + (conn.getAlumniEmail() != null ? " (" + conn.getAlumniEmail() + ")" : ""));
+        if (conn.getAlumniCompany() != null || conn.getAlumniRole() != null) {
+            String company = conn.getAlumniCompany() != null ? conn.getAlumniCompany() : "N/A";
+            String role = conn.getAlumniRole() != null ? conn.getAlumniRole() : "N/A";
+            out.println("   Professional : " + company + " | " + role);
+        }
+        if (conn.getAlumniDegree() != null || conn.getAlumniDepartment() != null) {
+            out.println("   Academic Info: " + safeString(conn.getAlumniDegree()) + " - " + safeString(conn.getAlumniDepartment()));
+        }
+        out.println("   Topic        : " + safeString(conn.getTopic()));
+        out.println("   Status       : " + conn.getStatus());
+        if (conn.getRespondedAt() != null) {
+            out.println("   Connected On : " + formatDateTime(conn.getRespondedAt()));
+        } else if (conn.getRequestedAt() != null) {
+            out.println("   Requested At : " + formatDateTime(conn.getRequestedAt()));
         }
         out.println("--------------------------------------------------");
     }

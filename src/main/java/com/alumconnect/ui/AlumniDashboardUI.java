@@ -59,6 +59,8 @@ public class AlumniDashboardUI {
     public static final String OPTION_PROFILE       = "1";
     /** Menu option: view and manage received mentorship requests. */
     public static final String OPTION_VIEW_REQUESTS = "2";
+    /** Menu option: view accepted mentees (Prompt 19). */
+    public static final String OPTION_MY_MENTEES    = "3";
     /** Menu option: log the alumni out. */
     public static final String OPTION_LOGOUT        = "9";
     /** Menu option: exit the application. */
@@ -190,6 +192,7 @@ public class AlumniDashboardUI {
         out.println("Alumni Menu:");
         out.println("  [" + OPTION_PROFILE       + "] My Profile");
         out.println("  [" + OPTION_VIEW_REQUESTS + "] View Mentorship Requests");
+        out.println("  [" + OPTION_MY_MENTEES    + "] My Mentees");
         out.println("  [" + OPTION_LOGOUT        + "] Logout");
         out.println("  [" + OPTION_EXIT          + "] Exit");
         out.println("--------------------------------------------------");
@@ -214,8 +217,9 @@ public class AlumniDashboardUI {
         switch (choice) {
             case OPTION_PROFILE -> handleProfileSubMenu();
             case OPTION_VIEW_REQUESTS, "REQUESTS", "5" -> handleMentorshipRequests(alumni);
+            case OPTION_MY_MENTEES, "MENTEES", "M" -> handleMyMentees(alumni);
             case OPTION_LOGOUT, "4" -> handleLogout();
-            case OPTION_EXIT, "3", "6", "10" -> {
+            case OPTION_EXIT, "6", "10" -> {
                 out.println("\n[AlumConnect] Goodbye! Thank you for using AlumConnect.");
             }
             default -> out.println("[AlumConnect] Invalid choice '" + choice
@@ -435,6 +439,96 @@ public class AlumniDashboardUI {
 
     private String safeString(String value) {
         return (value != null && !value.isBlank()) ? value.trim() : "Not Specified";
+    }
+
+    // ── My Mentees (Prompt 19) ────────────────────────────────────────────────
+
+    /**
+     * Direct programmatic entry point for viewing accepted mentees.
+     *
+     * @throws SecurityException if active session is unauthenticated or not an Alumni
+     */
+    public void viewMyMentees() {
+        validateAlumniSession();
+        User currentUser = UserSession.getInstance().getCurrentUser().orElseThrow(
+                () -> new SecurityException("Unauthorized: session user is missing."));
+        if (currentUser instanceof Alumni alumni) {
+            handleMyMentees(alumni);
+        } else {
+            throw new SecurityException("Access Denied: Current user is not an Alumni.");
+        }
+    }
+
+    /**
+     * Retrieves and displays accepted mentees for the current alumni.
+     *
+     * @param alumni the currently logged-in Alumni
+     */
+    public void handleMyMentees(Alumni alumni) {
+        validateAlumniSession();
+
+        out.println("\n==================================================");
+        out.println("                   MY MENTEES                     ");
+        out.println("==================================================");
+
+        MentorshipRequestResult result = mentorshipRequestService.getConnectionsForAlumni(alumni.getId());
+        if (!result.isSuccess()) {
+            out.println("[ERROR] " + result.getMessage());
+            out.println("==================================================");
+            return;
+        }
+
+        List<MentorshipRequest> mentees = result.getRequests();
+        if (mentees.isEmpty()) {
+            out.println("[INFO] You have no active mentees yet.");
+            out.println("==================================================");
+            out.println("[AlumConnect] Returning to Alumni Dashboard.");
+            return;
+        }
+
+        out.println("Displaying " + mentees.size() + " active mentee(s):");
+        out.println("--------------------------------------------------");
+
+        for (int i = 0; i < mentees.size(); i++) {
+            printMenteeCard(i + 1, mentees.get(i));
+        }
+
+        out.println("==================================================");
+        out.println("[INFO] End of Mentees List.");
+        out.println("[AlumConnect] Returning to Alumni Dashboard.");
+    }
+
+    /**
+     * Convenience overload retrieving the session alumni automatically.
+     */
+    public void handleMyMentees() {
+        validateAlumniSession();
+        UserSession session = UserSession.getInstance();
+        User currentUser = session.getCurrentUser().orElseThrow(
+                () -> new SecurityException("Unauthorized: session user is missing."));
+        if (currentUser instanceof Alumni a) {
+            handleMyMentees(a);
+        }
+    }
+
+    private void printMenteeCard(int index, MentorshipRequest conn) {
+        out.println(index + ". Connection ID: " + conn.getId());
+        out.println("   Student Name : " + safeString(conn.getStudentName())
+                + (conn.getStudentEmail() != null ? " (" + conn.getStudentEmail() + ")" : ""));
+        if (conn.getStudentDegree() != null || conn.getStudentDepartment() != null) {
+            out.println("   Academic Info: " + safeString(conn.getStudentDegree()) + " - " + safeString(conn.getStudentDepartment()));
+        }
+        if (conn.getStudentGraduationYear() != null && conn.getStudentGraduationYear() > 0) {
+            out.println("   Graduation   : Class of " + conn.getStudentGraduationYear());
+        }
+        out.println("   Topic        : " + safeString(conn.getTopic()));
+        out.println("   Status       : " + conn.getStatus());
+        if (conn.getRespondedAt() != null) {
+            out.println("   Connected On : " + formatDateTime(conn.getRespondedAt()));
+        } else if (conn.getRequestedAt() != null) {
+            out.println("   Requested At : " + formatDateTime(conn.getRequestedAt()));
+        }
+        out.println("--------------------------------------------------");
     }
 
     // ── Profile sub-menu ──────────────────────────────────────────────────────

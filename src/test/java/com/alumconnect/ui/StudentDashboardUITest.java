@@ -605,6 +605,156 @@ class StudentDashboardUITest {
         assertThrows(SecurityException.class, dashboard::handleMyMentorshipRequests);
     }
 
+    // ── Prompt 19: Mentorship Connections Tests ──────────────────────────────
+
+    @Test
+    @DisplayName("Menu option 6 My Mentorship Connections appears in student dashboard header")
+    void testOptionMyConnectionsAppearsInStudentDashboardMenu() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        StudentDashboardUI dashboard = buildDashboard("0\n", capture);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[6] My Mentorship Connections"),
+                "Dashboard menu must offer '[6] My Mentorship Connections'.");
+    }
+
+    @Test
+    @DisplayName("Menu option 6 displays accepted connections with alumni details")
+    void testOptionMyConnectionsDisplaysAcceptedConnections() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        ByteArrayInputStream in = new ByteArrayInputStream("6\n".getBytes(StandardCharsets.UTF_8));
+        PrintStream ps = new PrintStream(capture);
+
+        FakeStudentProfileService fakeProfileService = new FakeStudentProfileService();
+        StudentProfileUI profileUI = new StudentProfileUI(fakeProfileService, in, ps);
+
+        AlumniDirectoryService dirService = new AlumniDirectoryService(new FakeAlumniDirectoryRepo(List.of()));
+        AlumniDirectoryUI dirUI = new AlumniDirectoryUI(dirService, in, ps);
+
+        FakeMentorshipRequestRepo reqRepo = new FakeMentorshipRequestRepo();
+
+        // Accepted connection
+        com.alumconnect.model.MentorshipRequest conn = new com.alumconnect.model.MentorshipRequest(
+                student.getId(), alumni.getId(), "Cloud Engineering", "Looking for mentoring");
+        conn.setId(101);
+        conn.setStatus(com.alumconnect.model.MentorshipStatus.ACCEPTED);
+        conn.setAlumniName("Ravi Kumar");
+        conn.setAlumniEmail("alumni@thapar.edu");
+        conn.setAlumniCompany("Google");
+        conn.setAlumniRole("Staff Engineer");
+        conn.setAlumniDepartment("Electronics");
+        conn.setAlumniDegree("B.Tech");
+        conn.setRespondedAt(java.time.LocalDateTime.now());
+        reqRepo.addRequest(conn);
+
+        // Pending request (should not appear in connections)
+        com.alumconnect.model.MentorshipRequest pendingReq = new com.alumconnect.model.MentorshipRequest(
+                student.getId(), 99, "Other Topic", "Other Msg");
+        pendingReq.setId(102);
+        pendingReq.setStatus(com.alumconnect.model.MentorshipStatus.PENDING);
+        reqRepo.addRequest(pendingReq);
+
+        com.alumconnect.service.MentorshipRequestService reqService = new com.alumconnect.service.MentorshipRequestService(reqRepo, userRepo);
+        StudentDashboardUI dashboard = new StudentDashboardUI(profileUI, dirUI, reqService, userService, in, ps);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("MY MENTORSHIP CONNECTIONS"));
+        assertTrue(output.contains("Ravi Kumar"));
+        assertTrue(output.contains("Google"));
+        assertTrue(output.contains("Staff Engineer"));
+        assertTrue(output.contains("Cloud Engineering"));
+        assertTrue(output.contains("End of Mentorship Connections."));
+        assertTrue(output.contains("Returning to Student Dashboard."));
+        assertFalse(output.contains("Other Topic"), "Pending requests must not appear in connections.");
+    }
+
+    @Test
+    @DisplayName("Menu option 6 displays empty state when student has no accepted connections")
+    void testOptionMyConnectionsEmptyState() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        ByteArrayInputStream in = new ByteArrayInputStream("6\n".getBytes(StandardCharsets.UTF_8));
+        PrintStream ps = new PrintStream(capture);
+
+        FakeStudentProfileService fakeProfileService = new FakeStudentProfileService();
+        StudentProfileUI profileUI = new StudentProfileUI(fakeProfileService, in, ps);
+
+        AlumniDirectoryService dirService = new AlumniDirectoryService(new FakeAlumniDirectoryRepo(List.of()));
+        AlumniDirectoryUI dirUI = new AlumniDirectoryUI(dirService, in, ps);
+
+        FakeMentorshipRequestRepo reqRepo = new FakeMentorshipRequestRepo(); // Empty repo
+        com.alumconnect.service.MentorshipRequestService reqService = new com.alumconnect.service.MentorshipRequestService(reqRepo, userRepo);
+        StudentDashboardUI dashboard = new StudentDashboardUI(profileUI, dirUI, reqService, userService, in, ps);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("MY MENTORSHIP CONNECTIONS"));
+        assertTrue(output.contains("[INFO] You have no active mentorship connections yet."));
+        assertTrue(output.contains("Returning to Student Dashboard."));
+    }
+
+    @Test
+    @DisplayName("Menu option 6 displays error when database error occurs")
+    void testOptionMyConnectionsDatabaseError() {
+        userService.login("student@thapar.edu", "StudentP@ss1");
+
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        ByteArrayInputStream in = new ByteArrayInputStream("6\n".getBytes(StandardCharsets.UTF_8));
+        PrintStream ps = new PrintStream(capture);
+
+        FakeStudentProfileService fakeProfileService = new FakeStudentProfileService();
+        StudentProfileUI profileUI = new StudentProfileUI(fakeProfileService, in, ps);
+
+        AlumniDirectoryService dirService = new AlumniDirectoryService(new FakeAlumniDirectoryRepo(List.of()));
+        AlumniDirectoryUI dirUI = new AlumniDirectoryUI(dirService, in, ps);
+
+        FakeMentorshipRequestRepo reqRepo = new FakeMentorshipRequestRepo();
+        reqRepo.setThrowOnQuery(true);
+        com.alumconnect.service.MentorshipRequestService reqService = new com.alumconnect.service.MentorshipRequestService(reqRepo, userRepo);
+        StudentDashboardUI dashboard = new StudentDashboardUI(profileUI, dirUI, reqService, userService, in, ps);
+
+        assertDoesNotThrow(dashboard::show);
+
+        String output = capture.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR]"));
+        assertTrue(output.contains("Database error"));
+    }
+
+    @Test
+    @DisplayName("handleMyMentorshipConnections rejects unauthenticated and non-student access")
+    void testHandleMyMentorshipConnectionsSecurityGuards() {
+        ByteArrayOutputStream capture = new ByteArrayOutputStream();
+        ByteArrayInputStream in = new ByteArrayInputStream(new byte[0]);
+        PrintStream ps = new PrintStream(capture);
+
+        FakeStudentProfileService fakeProfileService = new FakeStudentProfileService();
+        StudentProfileUI profileUI = new StudentProfileUI(fakeProfileService, in, ps);
+        AlumniDirectoryService dirService = new AlumniDirectoryService(new FakeAlumniDirectoryRepo(List.of()));
+        AlumniDirectoryUI dirUI = new AlumniDirectoryUI(dirService, in, ps);
+        FakeMentorshipRequestRepo reqRepo = new FakeMentorshipRequestRepo();
+        com.alumconnect.service.MentorshipRequestService reqService = new com.alumconnect.service.MentorshipRequestService(reqRepo, userRepo);
+        StudentDashboardUI dashboard = new StudentDashboardUI(profileUI, dirUI, reqService, userService, in, ps);
+
+        // 1. Unauthenticated access
+        assertThrows(SecurityException.class, dashboard::handleMyMentorshipConnections);
+        assertThrows(SecurityException.class, dashboard::viewMentorshipConnections);
+
+        // 2. Non-student (Alumni) access
+        userService.login("alumni@thapar.edu", "AlumniP@ss1");
+        assertThrows(SecurityException.class, dashboard::handleMyMentorshipConnections);
+        assertThrows(SecurityException.class, dashboard::viewMentorshipConnections);
+    }
+
     private static class FakeMentorshipRequestRepo implements com.alumconnect.repository.MentorshipRequestRepository {
         private final List<com.alumconnect.model.MentorshipRequest> requests = new ArrayList<>();
         private boolean throwOnQuery = false;
@@ -616,6 +766,14 @@ class StudentDashboardUITest {
         public List<com.alumconnect.model.MentorshipRequest> findRequestsByStudentId(int studentId) throws SQLException {
             if (throwOnQuery) throw new SQLException("Simulated DB query error");
             return requests.stream().filter(r -> r.getStudentId() == studentId).toList();
+        }
+
+        @Override
+        public List<com.alumconnect.model.MentorshipRequest> findAcceptedConnectionsByStudentId(int studentId) throws SQLException {
+            if (throwOnQuery) throw new SQLException("Simulated DB query error");
+            return requests.stream()
+                    .filter(r -> r.getStudentId() == studentId && r.getStatus() == com.alumconnect.model.MentorshipStatus.ACCEPTED)
+                    .toList();
         }
 
         @Override public int createRequest(com.alumconnect.service.dto.MentorshipRequestDto dto) { return 1; }

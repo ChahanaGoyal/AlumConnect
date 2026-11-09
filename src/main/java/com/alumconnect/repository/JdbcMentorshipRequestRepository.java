@@ -171,6 +171,57 @@ public class JdbcMentorshipRequestRepository implements MentorshipRequestReposit
     }
 
     @Override
+    public List<MentorshipRequest> findAcceptedConnectionsByStudentId(int studentId) throws SQLException {
+        final String sql = "SELECT mr.id, mr.student_id, mr.alumni_id, mr.topic, mr.message, mr.status, " +
+                "mr.response_notes, mr.requested_at, mr.responded_at, mr.completed_at, mr.updated_at, " +
+                "u.full_name AS alumni_name, u.email AS alumni_email, " +
+                "ap.degree AS alumni_degree, ap.department AS alumni_department, " +
+                "ap.current_company AS alumni_company, ap.current_role AS alumni_role " +
+                "FROM mentorship_requests mr " +
+                "JOIN users u ON mr.alumni_id = u.id " +
+                "LEFT JOIN alumni_profiles ap ON mr.alumni_id = ap.user_id " +
+                "WHERE mr.student_id = ? AND mr.status = 'ACCEPTED' " +
+                "ORDER BY mr.responded_at DESC, mr.requested_at DESC, mr.id DESC";
+
+        List<MentorshipRequest> list = new ArrayList<>();
+        try (Connection conn = connectionSupplier.get();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, studentId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRowToStudentMentorshipRequest(rs));
+                }
+            }
+        }
+        return list;
+    }
+
+    @Override
+    public List<MentorshipRequest> findAcceptedConnectionsByAlumniId(int alumniId) throws SQLException {
+        final String sql = "SELECT mr.id, mr.student_id, mr.alumni_id, mr.topic, mr.message, mr.status, " +
+                "mr.response_notes, mr.requested_at, mr.responded_at, mr.completed_at, mr.updated_at, " +
+                "u.full_name AS student_name, u.email AS student_email, " +
+                "sp.degree AS student_degree, sp.department AS student_department, sp.graduation_year AS student_graduation_year " +
+                "FROM mentorship_requests mr " +
+                "JOIN users u ON mr.student_id = u.id " +
+                "LEFT JOIN student_profiles sp ON mr.student_id = sp.user_id " +
+                "WHERE mr.alumni_id = ? AND mr.status = 'ACCEPTED' " +
+                "ORDER BY mr.responded_at DESC, mr.requested_at DESC, mr.id DESC";
+
+        List<MentorshipRequest> list = new ArrayList<>();
+        try (Connection conn = connectionSupplier.get();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, alumniId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRowToMentorshipRequest(rs));
+                }
+            }
+        }
+        return list;
+    }
+
+    @Override
     public Optional<MentorshipRequest> findRequestById(int requestId) throws SQLException {
         final String sql = "SELECT mr.id, mr.student_id, mr.alumni_id, mr.topic, mr.message, mr.status, " +
                 "mr.response_notes, mr.requested_at, mr.responded_at, mr.completed_at, mr.updated_at, " +

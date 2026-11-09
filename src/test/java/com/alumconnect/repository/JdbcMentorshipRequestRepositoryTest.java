@@ -206,4 +206,88 @@ class JdbcMentorshipRequestRepositoryTest {
         assertEquals(alumni.getEmail(), req.getAlumniEmail());
         assertEquals(MentorshipStatus.PENDING, req.getStatus());
     }
+
+    @Test
+    @DisplayName("Find accepted connections by student ID (Prompt 19)")
+    void testFindAcceptedConnectionsByStudentId() throws SQLException {
+        assumeTrue(dbAvailable, "Database must be available for integration test");
+
+        Student student = new Student("test.std5." + System.currentTimeMillis() + "@thapar.edu",
+                "hashedPass1", "Student Five", null, "CS", 2026);
+        student.setRole(Role.STUDENT);
+        userRepo.saveStudent(student);
+        createdUserIds.add(student.getId());
+
+        Alumni alumni = new Alumni("test.alm5." + System.currentTimeMillis() + "@thapar.edu",
+                "hashedPass2", "Alumni Five", null, "CS", 2016);
+        alumni.setRole(Role.ALUMNI);
+        alumni.setCurrentCompany("Microsoft");
+        alumni.setCurrentRole("Senior Architect");
+        userRepo.saveAlumni(alumni);
+        createdUserIds.add(alumni.getId());
+
+        // Create accepted request
+        MentorshipRequestDto dto1 = new MentorshipRequestDto(student.getId(), alumni.getId(),
+                "Accepted Topic", "Accepted Message");
+        int reqId1 = requestRepo.createRequest(dto1);
+        requestRepo.updateRequestStatus(reqId1, MentorshipStatus.ACCEPTED, LocalDateTime.now());
+        createdRequestIds.add(reqId1);
+
+        // Create pending request (should be excluded)
+        MentorshipRequestDto dto2 = new MentorshipRequestDto(student.getId(), alumni.getId(),
+                "Pending Topic", "Pending Message");
+        int reqId2 = requestRepo.createRequest(dto2);
+        createdRequestIds.add(reqId2);
+
+        List<MentorshipRequest> connections = requestRepo.findAcceptedConnectionsByStudentId(student.getId());
+        assertEquals(1, connections.size());
+        MentorshipRequest conn = connections.get(0);
+        assertEquals(reqId1, conn.getId());
+        assertEquals(MentorshipStatus.ACCEPTED, conn.getStatus());
+        assertEquals("Alumni Five", conn.getAlumniName());
+        assertEquals(alumni.getEmail(), conn.getAlumniEmail());
+        assertEquals("Microsoft", conn.getAlumniCompany());
+        assertEquals("Senior Architect", conn.getAlumniRole());
+    }
+
+    @Test
+    @DisplayName("Find accepted connections by alumni ID (Prompt 19)")
+    void testFindAcceptedConnectionsByAlumniId() throws SQLException {
+        assumeTrue(dbAvailable, "Database must be available for integration test");
+
+        Student student = new Student("test.std6." + System.currentTimeMillis() + "@thapar.edu",
+                "hashedPass1", "Student Six", null, "ECE", 2024);
+        student.setRole(Role.STUDENT);
+        userRepo.saveStudent(student);
+        createdUserIds.add(student.getId());
+
+        Alumni alumni = new Alumni("test.alm6." + System.currentTimeMillis() + "@thapar.edu",
+                "hashedPass2", "Alumni Six", null, "ECE", 2015);
+        alumni.setRole(Role.ALUMNI);
+        userRepo.saveAlumni(alumni);
+        createdUserIds.add(alumni.getId());
+
+        // Create accepted request
+        MentorshipRequestDto dto1 = new MentorshipRequestDto(student.getId(), alumni.getId(),
+                "Accepted Topic 2", "Accepted Message 2");
+        int reqId1 = requestRepo.createRequest(dto1);
+        requestRepo.updateRequestStatus(reqId1, MentorshipStatus.ACCEPTED, LocalDateTime.now());
+        createdRequestIds.add(reqId1);
+
+        // Create rejected request (should be excluded)
+        MentorshipRequestDto dto2 = new MentorshipRequestDto(student.getId(), alumni.getId(),
+                "Rejected Topic", "Rejected Message");
+        int reqId2 = requestRepo.createRequest(dto2);
+        requestRepo.updateRequestStatus(reqId2, MentorshipStatus.REJECTED, LocalDateTime.now());
+        createdRequestIds.add(reqId2);
+
+        List<MentorshipRequest> connections = requestRepo.findAcceptedConnectionsByAlumniId(alumni.getId());
+        assertEquals(1, connections.size());
+        MentorshipRequest conn = connections.get(0);
+        assertEquals(reqId1, conn.getId());
+        assertEquals(MentorshipStatus.ACCEPTED, conn.getStatus());
+        assertEquals("Student Six", conn.getStudentName());
+        assertEquals(student.getEmail(), conn.getStudentEmail());
+        assertEquals("ECE", conn.getStudentDepartment());
+    }
 }

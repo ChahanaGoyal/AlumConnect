@@ -148,6 +148,15 @@ public class AlumniProfileUI {
      * @param alumniId the target alumni's user ID
      */
     public void promptSendMentorshipRequest(int alumniId) {
+        // Guard: only authenticated students may send mentorship requests.
+        if (!com.alumconnect.util.UserSession.getInstance().isLoggedIn()) {
+            out.println("[AlumConnect] Access denied: You must be logged in to send a mentorship request.");
+            throw new SecurityException("Unauthorized: No user is currently logged in.");
+        }
+        if (!com.alumconnect.util.UserSession.getInstance().isStudent()) {
+            out.println("[AlumConnect] Access denied: Only students can send mentorship requests.");
+            throw new SecurityException("Access Denied: Only students can send mentorship requests.");
+        }
         out.println("\nMentorship Options:");
         out.println("  [1] Send Mentorship Request");
         out.println("  [0] Back");

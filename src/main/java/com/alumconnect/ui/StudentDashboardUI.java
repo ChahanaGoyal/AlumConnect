@@ -307,8 +307,14 @@ public class StudentDashboardUI {
 
     /**
      * Opens the Alumni Directory UI for the student to browse available alumni.
+     *
+     * <p>Validates the student session before proceeding; throws {@link SecurityException}
+     * if called without an authenticated student session, preventing direct-call bypasses.
+     *
+     * @throws SecurityException if the caller is not an authenticated Student
      */
     public void handleBrowseAlumni() {
+        validateStudentSession();
         try {
             alumniDirectoryUI.showDirectory();
         } catch (SecurityException e) {
@@ -322,8 +328,14 @@ public class StudentDashboardUI {
 
     /**
      * Opens the Alumni Search prompt for the student to search available alumni.
+     *
+     * <p>Validates the student session before proceeding; throws {@link SecurityException}
+     * if called without an authenticated student session, preventing direct-call bypasses.
+     *
+     * @throws SecurityException if the caller is not an authenticated Student
      */
     public void handleSearchAlumni() {
+        validateStudentSession();
         try {
             alumniDirectoryUI.promptAndSearchAlumni();
         } catch (SecurityException e) {
@@ -337,8 +349,14 @@ public class StudentDashboardUI {
 
     /**
      * Opens the Alumni Filter prompt for the student to narrow down alumni by structured criteria.
+     *
+     * <p>Validates the student session before proceeding; throws {@link SecurityException}
+     * if called without an authenticated student session, preventing direct-call bypasses.
+     *
+     * @throws SecurityException if the caller is not an authenticated Student
      */
     public void handleFilterAlumni() {
+        validateStudentSession();
         try {
             alumniDirectoryUI.promptAndFilterAlumni();
         } catch (SecurityException e) {
@@ -547,6 +565,7 @@ public class StudentDashboardUI {
      * Handles missing profile and database errors with user-friendly messages.
      */
     public void handleProfileSubMenu() {
+        validateStudentSession();
         out.println("\n--- My Profile ---");
         out.println("  [V] View my profile");
         out.println("  [C] Create my profile");

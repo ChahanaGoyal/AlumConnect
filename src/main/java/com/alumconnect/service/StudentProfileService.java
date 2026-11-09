@@ -263,6 +263,81 @@ public class StudentProfileService {
         }
     }
 
+    // ── Ownership-checked Parameterized Access (Prompt 21 RBAC) ──────────────
+
+    /**
+     * Returns the student profile for the given {@code userId}, enforcing that:
+     * <ul>
+     *   <li>The caller is an authenticated Student.</li>
+     *   <li>The requested {@code userId} matches the logged-in student's own ID.</li>
+     * </ul>
+     *
+     * @param userId the student user ID to look up
+     * @return {@link StudentProfileResult} — success, or failure with an access-denied/error message
+     */
+    public StudentProfileResult viewProfile(int userId) {
+        // 1. Authentication and role guard
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return StudentProfileResult.failure(
+                    "Access denied: You must be logged in to view a student profile.");
+        }
+        User user = sessionUser.get();
+        if (user.getRole() != Role.STUDENT) {
+            return StudentProfileResult.failure(
+                    "Access denied: Only students can view student profiles.");
+        }
+
+        // 2. Ownership check: students may only access their own profile
+        if (user.getId() == null || user.getId() <= 0) {
+            return StudentProfileResult.failure("Invalid user session. Please log in again.");
+        }
+        if (user.getId() != userId) {
+            return StudentProfileResult.failure(
+                    "Access denied: You cannot view another student's profile.");
+        }
+
+        // 3. Delegate to the session-based method (userId already validated above)
+        return viewMyProfile();
+    }
+
+    /**
+     * Updates the profile identified by {@code userId}, enforcing that:
+     * <ul>
+     *   <li>The caller is an authenticated Student.</li>
+     *   <li>The requested {@code userId} matches the logged-in student's own ID.</li>
+     * </ul>
+     *
+     * @param userId  the student user ID whose profile to update
+     * @param request the profile update data
+     * @return {@link StudentProfileResult} — success, or failure with an access-denied/error message
+     */
+    public StudentProfileResult updateProfile(int userId, StudentProfileRequest request) {
+        // 1. Authentication and role guard
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return StudentProfileResult.failure(
+                    "Access denied: You must be logged in to update a student profile.");
+        }
+        User user = sessionUser.get();
+        if (user.getRole() != Role.STUDENT) {
+            return StudentProfileResult.failure(
+                    "Access denied: Only students can update student profiles.");
+        }
+
+        // 2. Ownership check
+        if (user.getId() == null || user.getId() <= 0) {
+            return StudentProfileResult.failure("Invalid user session. Please log in again.");
+        }
+        if (user.getId() != userId) {
+            return StudentProfileResult.failure(
+                    "Access denied: You cannot modify another student's profile.");
+        }
+
+        // 3. Delegate to the session-based update method
+        return updateMyProfile(request);
+    }
+
     // ── Validation ────────────────────────────────────────────────────────────
 
     /**

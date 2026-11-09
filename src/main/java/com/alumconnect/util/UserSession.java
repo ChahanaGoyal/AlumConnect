@@ -125,4 +125,59 @@ public class UserSession {
                     currentUser.getRole() + "] cannot access " + requiredRole + "-only functionality.");
         }
     }
+
+    /**
+     * Enforces access control by verifying that the current logged-in user is a Student.
+     *
+     * @throws SecurityException if not logged in or role is not STUDENT
+     */
+    public void requireStudent() {
+        requireRole(Role.STUDENT);
+    }
+
+    /**
+     * Enforces access control by verifying that the current logged-in user is an Alumni.
+     *
+     * @throws SecurityException if not logged in or role is not ALUMNI
+     */
+    public void requireAlumni() {
+        requireRole(Role.ALUMNI);
+    }
+
+    /**
+     * Enforces resource ownership by verifying that the current user's ID matches expectedUserId.
+     *
+     * <p>Must only be called after authentication has already been verified (e.g. via
+     * {@link #requireStudent()} or {@link #requireAlumni()}).
+     *
+     * @param expectedUserId the resource owner's user ID
+     * @throws SecurityException if not logged in or the current user ID does not match
+     */
+    public void requireUserId(int expectedUserId) {
+        if (!isLoggedIn()) {
+            throw new SecurityException("Unauthorized: No user is currently logged in.");
+        }
+        User user = currentUser;
+        if (user.getId() == null || user.getId() != expectedUserId) {
+            throw new SecurityException(
+                    "Access Denied: You cannot access or modify resources belonging to another user.");
+        }
+    }
+
+    /**
+     * Returns the authenticated user's ID.
+     *
+     * @return the logged-in user's ID (always positive)
+     * @throws SecurityException if not logged in or the user has an invalid (null/non-positive) ID
+     */
+    public int getAuthenticatedUserId() {
+        if (!isLoggedIn()) {
+            throw new SecurityException("Unauthorized: No user is currently logged in.");
+        }
+        User user = currentUser;
+        if (user.getId() == null || user.getId() <= 0) {
+            throw new SecurityException("Unauthorized: Invalid user session ID.");
+        }
+        return user.getId();
+    }
 }

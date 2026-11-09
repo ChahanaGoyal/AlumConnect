@@ -263,6 +263,80 @@ public class AlumniProfileService {
      * @param request the request to validate
      * @return list of human-readable error messages; empty means valid
      */
+    // -- Ownership-checked Parameterized Access (Prompt 21 RBAC) --
+
+    /**
+     * Returns the alumni profile for the given {@code userId}, enforcing that:
+     * <ul>
+     *   <li>The caller is an authenticated Alumni.</li>
+     *   <li>The requested {@code userId} matches the logged-in alumni's own ID.</li>
+     * </ul>
+     *
+     * @param userId the alumni user ID to look up
+     * @return {@link AlumniProfileResult} - success, or failure with an access-denied/error message
+     */
+    public AlumniProfileResult viewProfile(int userId) {
+        // 1. Authentication and role guard
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return AlumniProfileResult.failure(
+                    "Access denied: You must be logged in to view an alumni profile.");
+        }
+        User user = sessionUser.get();
+        if (user.getRole() != Role.ALUMNI) {
+            return AlumniProfileResult.failure(
+                    "Access denied: Only alumni can access alumni profiles.");
+        }
+
+        // 2. Ownership check
+        if (user.getId() == null || user.getId() <= 0) {
+            return AlumniProfileResult.failure("Invalid user session. Please log in again.");
+        }
+        if (user.getId() != userId) {
+            return AlumniProfileResult.failure(
+                    "Access denied: You cannot view another alumni's profile.");
+        }
+
+        // 3. Delegate to the session-based method
+        return viewMyProfile();
+    }
+
+    /**
+     * Updates the alumni profile identified by {@code userId}, enforcing that:
+     * <ul>
+     *   <li>The caller is an authenticated Alumni.</li>
+     *   <li>The requested {@code userId} matches the logged-in alumni's own ID.</li>
+     * </ul>
+     *
+     * @param userId  the alumni user ID whose profile to update
+     * @param request the profile update data
+     * @return {@link AlumniProfileResult} - success, or failure with an access-denied/error message
+     */
+    public AlumniProfileResult updateProfile(int userId, AlumniProfileRequest request) {
+        // 1. Authentication and role guard
+        Optional<User> sessionUser = UserSession.getInstance().getCurrentUser();
+        if (sessionUser.isEmpty()) {
+            return AlumniProfileResult.failure(
+                    "Access denied: You must be logged in to update an alumni profile.");
+        }
+        User user = sessionUser.get();
+        if (user.getRole() != Role.ALUMNI) {
+            return AlumniProfileResult.failure(
+                    "Access denied: Only alumni can update alumni profiles.");
+        }
+
+        // 2. Ownership check
+        if (user.getId() == null || user.getId() <= 0) {
+            return AlumniProfileResult.failure("Invalid user session. Please log in again.");
+        }
+        if (user.getId() != userId) {
+            return AlumniProfileResult.failure(
+                    "Access denied: You cannot modify another alumni's profile.");
+        }
+
+        // 3. Delegate to the session-based update method
+        return updateMyProfile(request);
+    }
     public List<String> validateProfileRequest(AlumniProfileRequest request) {
         List<String> errors = new ArrayList<>();
 

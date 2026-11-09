@@ -538,6 +538,7 @@ public class AlumniDashboardUI {
      * Handles missing profile and database errors with user-friendly messages.
      */
     public void handleProfileSubMenu() {
+        validateAlumniSession();
         out.println("\n--- My Profile ---");
         out.println("  [V] View my profile");
         out.println("  [C] Create my profile");

@@ -132,12 +132,15 @@ public class AuthUI {
      * @return the LoginResult
      */
     public LoginResult promptAndLogin() {
-        out.println("\n==================================================");
-        out.println("               AlumConnect Login                  ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "AlumConnect Login");
+        out.println("Please enter your account credentials (or enter '0' to cancel):");
 
         out.print("Email: ");
         String email = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
+        if ("0".equals(email) || "cancel".equalsIgnoreCase(email)) {
+            out.println("[AlumConnect] Login cancelled.");
+            return LoginResult.failure("Login cancelled by user.");
+        }
 
         out.print("Password: ");
         String password = scanner.hasNextLine() ? scanner.nextLine() : "";
@@ -186,26 +189,26 @@ public class AuthUI {
         // Enforce access control
         UserSession.getInstance().requireRole(Role.STUDENT);
 
-        out.println("\n==================================================");
-        out.println("               STUDENT DASHBOARD                  ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "STUDENT DASHBOARD");
         out.println("Welcome, " + student.getFullName() + "!");
         out.println("Department: " + student.getDepartment() + " | Semester: " + student.getCurrentSemester() + " | Grad: " + student.getGraduationYear());
-        if (student.getEnrollmentNumber() != null) {
+        if (student.getEnrollmentNumber() != null && !student.getEnrollmentNumber().isBlank()) {
             out.println("Enrollment No: " + student.getEnrollmentNumber());
         }
-        if (student.getSkills() != null) {
+        if (student.getSkills() != null && !student.getSkills().isBlank()) {
             out.println("Skills: " + student.getSkills());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("Student Menu:");
         out.println("  [1] My Profile");
         out.println("  [2] Browse Alumni");
         out.println("  [3] Search Alumni");
         out.println("  [4] Filter Alumni");
+        out.println("  [5] My Mentorship Requests");
+        out.println("  [6] My Mentorship Connections");
         out.println("  [9] Logout");
         out.println("  [0] Exit");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         // Handle student menu selection via the dedicated dashboard UI
         studentDashboardUI.handleMenuSelection(student);
@@ -221,9 +224,7 @@ public class AuthUI {
         // Enforce access control
         UserSession.getInstance().requireRole(Role.ALUMNI);
 
-        out.println("\n==================================================");
-        out.println("               ALUMNI DASHBOARD                   ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "ALUMNI DASHBOARD");
         out.println("Welcome, " + alumni.getFullName() + "!");
         String summary = alumni.getProfessionalSummary();
         if (summary != null && !summary.isBlank()) {
@@ -233,12 +234,14 @@ public class AuthUI {
         if (alumni.getExpertiseAreas() != null && !alumni.getExpertiseAreas().isBlank()) {
             out.println("Expertise        : " + alumni.getExpertiseAreas());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("Alumni Menu:");
         out.println("  [1] My Profile");
+        out.println("  [2] View Mentorship Requests");
+        out.println("  [3] My Mentees");
         out.println("  [9] Logout");
         out.println("  [0] Exit");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         // Handle alumni menu selection via the dedicated dashboard UI
         alumniDashboardUI.handleMenuSelection(alumni);

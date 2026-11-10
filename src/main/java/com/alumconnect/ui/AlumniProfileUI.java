@@ -101,15 +101,13 @@ public class AlumniProfileUI {
             return;
         }
 
-        out.println("\n==================================================");
-        out.println("                 ALUMNI PROFILE                   ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "ALUMNI PROFILE");
         out.println("  Full Name       : " + alumni.getFullName());
         out.println("  Email           : " + alumni.getEmail());
-        if (alumni.getPhone() != null) {
+        if (alumni.getPhone() != null && !alumni.getPhone().isBlank()) {
             out.println("  Phone           : " + alumni.getPhone());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("  Degree          : " + alumni.getDegree());
         out.println("  Department      : " + alumni.getDepartment());
         out.println("  Graduation Year : " + alumni.getGraduationYear());
@@ -126,7 +124,7 @@ public class AlumniProfileUI {
         if (alumni.getExpertiseAreas() != null) {
             out.println("  Expertise Areas : " + alumni.getExpertiseAreas());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("  Mentorship      : " + (alumni.isAvailableForMentorship() ? "Available" : "Not Available"));
         out.println("  Max Mentees     : " + alumni.getMaxMentees());
         if (alumni.getBio() != null) {
@@ -135,7 +133,7 @@ public class AlumniProfileUI {
         if (alumni.getLinkedinUrl() != null) {
             out.println("  LinkedIn        : " + alumni.getLinkedinUrl());
         }
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
 
         if (UserSession.getInstance().isStudent()) {
             promptSendMentorshipRequest(alumni.getId());
@@ -196,9 +194,7 @@ public class AlumniProfileUI {
      * @return the {@link AlumniProfileResult} from the update call
      */
     public AlumniProfileResult promptAndEditProfile() {
-        out.println("\n==================================================");
-        out.println("             Edit My Alumni Profile               ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "Edit My Alumni Profile");
         out.println("[INFO] Press Enter to keep the current value for any field.");
 
         // First load existing data so we can show current values as defaults
@@ -333,9 +329,7 @@ public class AlumniProfileUI {
      * @return the {@link AlumniProfileResult} from the creation call
      */
     public AlumniProfileResult promptAndCreateProfile() {
-        out.println("\n==================================================");
-        out.println("             Create My Alumni Profile             ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "Create My Alumni Profile");
 
         AlumniProfileRequest request = new AlumniProfileRequest();
 
@@ -429,15 +423,13 @@ public class AlumniProfileUI {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void printProfileDetails(Alumni alumni) {
-        out.println("\n==================================================");
-        out.println("               MY ALUMNI PROFILE                  ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "MY ALUMNI PROFILE");
         out.println("  Full Name       : " + alumni.getFullName());
         out.println("  Email           : " + alumni.getEmail());
-        if (alumni.getPhone() != null) {
+        if (alumni.getPhone() != null && !alumni.getPhone().isBlank()) {
             out.println("  Phone           : " + alumni.getPhone());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("  Degree          : " + alumni.getDegree());
         out.println("  Department      : " + alumni.getDepartment());
         out.println("  Graduation Year : " + alumni.getGraduationYear());
@@ -454,7 +446,7 @@ public class AlumniProfileUI {
         if (alumni.getExpertiseAreas() != null) {
             out.println("  Expertise Areas : " + alumni.getExpertiseAreas());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("  Mentorship      : " + alumni.getMentorshipStatus());
         out.println("  Max Mentees     : " + alumni.getMaxMentees());
         if (alumni.getBio() != null) {
@@ -463,7 +455,7 @@ public class AlumniProfileUI {
         if (alumni.getLinkedinUrl() != null) {
             out.println("  LinkedIn        : " + alumni.getLinkedinUrl());
         }
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
     }
 
     private String readLine() {

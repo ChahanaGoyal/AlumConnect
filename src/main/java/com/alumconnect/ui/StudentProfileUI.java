@@ -88,9 +88,7 @@ public class StudentProfileUI {
      * @return the {@link StudentProfileResult} from the update call
      */
     public StudentProfileResult promptAndEditProfile() {
-        out.println("\n==================================================");
-        out.println("             Edit My Student Profile              ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "Edit My Student Profile");
         out.println("[INFO] Press Enter to keep the current value for any field.");
 
         // First load existing data so we can show current values as defaults
@@ -197,9 +195,7 @@ public class StudentProfileUI {
      * @return the {@link StudentProfileResult} from the creation call
      */
     public StudentProfileResult promptAndCreateProfile() {
-        out.println("\n==================================================");
-        out.println("             Create My Student Profile            ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "Create My Student Profile");
 
         StudentProfileRequest request = new StudentProfileRequest();
 
@@ -270,39 +266,37 @@ public class StudentProfileUI {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void printProfileDetails(Student student) {
-        out.println("\n==================================================");
-        out.println("               MY STUDENT PROFILE                ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "MY STUDENT PROFILE");
         out.println("  Full Name       : " + student.getFullName());
         out.println("  Email           : " + student.getEmail());
-        if (student.getPhone() != null) {
+        if (student.getPhone() != null && !student.getPhone().isBlank()) {
             out.println("  Phone           : " + student.getPhone());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("  Degree          : " + student.getDegree());
         out.println("  Department      : " + student.getDepartment());
         out.println("  Graduation Year : " + student.getGraduationYear());
         out.println("  Current Semester: " + student.getCurrentSemester());
-        if (student.getEnrollmentNumber() != null) {
+        if (student.getEnrollmentNumber() != null && !student.getEnrollmentNumber().isBlank()) {
             out.println("  Enrollment No   : " + student.getEnrollmentNumber());
         }
-        out.println("--------------------------------------------------");
-        if (student.getBio() != null) {
+        ConsoleFormatter.printDivider(out);
+        if (student.getBio() != null && !student.getBio().isBlank()) {
             out.println("  Bio             : " + student.getBio());
         }
-        if (student.getSkills() != null) {
+        if (student.getSkills() != null && !student.getSkills().isBlank()) {
             out.println("  Skills          : " + student.getSkills());
         }
-        if (student.getInterests() != null) {
+        if (student.getInterests() != null && !student.getInterests().isBlank()) {
             out.println("  Interests       : " + student.getInterests());
         }
-        if (student.getLinkedinUrl() != null) {
+        if (student.getLinkedinUrl() != null && !student.getLinkedinUrl().isBlank()) {
             out.println("  LinkedIn        : " + student.getLinkedinUrl());
         }
-        if (student.getGithubUrl() != null) {
+        if (student.getGithubUrl() != null && !student.getGithubUrl().isBlank()) {
             out.println("  GitHub          : " + student.getGithubUrl());
         }
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
     }
 
     private String readLine() {

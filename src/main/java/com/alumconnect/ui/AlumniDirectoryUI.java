@@ -89,32 +89,30 @@ public class AlumniDirectoryUI {
     public void showDirectory() {
         validateStudentSession();
 
-        out.println("\n==================================================");
-        out.println("                 ALUMNI DIRECTORY                 ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "ALUMNI DIRECTORY");
 
         AlumniDirectoryResult result = directoryService.getAlumniDirectory();
         if (!result.isSuccess()) {
             out.println("[ERROR] " + result.getMessage());
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         List<Alumni> alumniList = result.getAlumniList();
         if (alumniList.isEmpty()) {
             out.println("No registered alumni found in the directory.");
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         out.println("Displaying " + alumniList.size() + " registered alumni:");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         for (int i = 0; i < alumniList.size(); i++) {
             printAlumniCard(i + 1, alumniList.get(i));
         }
 
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
         out.println("[INFO] End of Alumni Directory.");
 
         promptViewAlumniFromList(alumniList);
@@ -130,9 +128,7 @@ public class AlumniDirectoryUI {
     public void promptAndSearchAlumni() {
         validateStudentSession();
 
-        out.println("\n==================================================");
-        out.println("                 ALUMNI SEARCH                    ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "ALUMNI SEARCH");
         out.print("Enter search keyword (name, company, role, industry, skills): ");
 
         if (!scanner.hasNextLine()) {
@@ -164,7 +160,7 @@ public class AlumniDirectoryUI {
 
         if (keyword == null || keyword.isBlank()) {
             out.println("[ERROR] Search keyword cannot be empty.");
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
@@ -172,25 +168,25 @@ public class AlumniDirectoryUI {
         AlumniDirectoryResult result = directoryService.searchAlumni(trimmedKeyword);
         if (!result.isSuccess()) {
             out.println("[ERROR] " + result.getMessage());
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         List<Alumni> alumniList = result.getAlumniList();
         if (alumniList.isEmpty()) {
             out.println("No alumni found matching '" + trimmedKeyword + "'.");
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         out.println("Displaying " + alumniList.size() + " matching alumni for '" + trimmedKeyword + "':");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         for (int i = 0; i < alumniList.size(); i++) {
             printAlumniCard(i + 1, alumniList.get(i));
         }
 
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
         out.println("[INFO] End of Alumni Search Results.");
 
         promptViewAlumniFromList(alumniList);
@@ -207,9 +203,7 @@ public class AlumniDirectoryUI {
     public void promptAndFilterAlumni() {
         validateStudentSession();
 
-        out.println("\n==================================================");
-        out.println("                 ALUMNI FILTERS                   ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "ALUMNI FILTERS");
         out.println("  [1] Filter by Graduation Year");
         out.println("  [2] Filter by Industry");
         out.println("  [3] Filter by Experience");
@@ -218,7 +212,7 @@ public class AlumniDirectoryUI {
         out.println("  [6] Filter by Degree/Course");
         out.println("  [7] Apply Multiple Filters");
         out.println("  [0] Back");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.print("Enter your choice: ");
 
         if (!scanner.hasNextLine()) {
@@ -478,32 +472,30 @@ public class AlumniDirectoryUI {
      * After listing results, offers an option to view any alumni's detailed profile (Prompt 15).
      */
     private void displayFilteredResults(AlumniFilterCriteria criteria) {
-        out.println("\n==================================================");
-        out.println("                 FILTERED RESULTS                 ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "FILTERED RESULTS");
 
         AlumniDirectoryResult result = directoryService.filterAlumni(criteria);
         if (!result.isSuccess()) {
             out.println("[ERROR] " + result.getMessage());
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         List<Alumni> list = result.getAlumniList();
         if (list.isEmpty()) {
             out.println("No alumni found matching the selected filters.");
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         out.println("Displaying " + list.size() + " matching alumni for selected filters:");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         for (int i = 0; i < list.size(); i++) {
             printAlumniCard(i + 1, list.get(i));
         }
 
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
         out.println("[INFO] End of Filtered Alumni Results.");
 
         promptViewAlumniFromList(list);
@@ -599,9 +591,7 @@ public class AlumniDirectoryUI {
                 ? String.valueOf(a.getMaxMentees())
                 : "N/A";
 
-        out.println("\n==================================================");
-        out.println("               ALUMNI PROFILE DETAILS             ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "ALUMNI PROFILE DETAILS");
         out.println("  Full Name            : " + safeString(a.getFullName()));
         out.println("  Graduation Year      : " + gradYearStr);
         out.println("  Degree               : " + safeString(a.getDegree()));
@@ -615,7 +605,7 @@ public class AlumniDirectoryUI {
         out.println("  LinkedIn             : " + safeString(a.getLinkedinUrl()));
         out.println("  Mentorship Available : " + mentorshipStr);
         out.println("  Max Mentees          : " + maxMenteesStr);
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
     }
 
     // ── Session Validation & Display Helpers ──────────────────────────────────

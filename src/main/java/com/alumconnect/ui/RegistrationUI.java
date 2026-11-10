@@ -43,9 +43,7 @@ public class RegistrationUI {
      * @return the {@link RegistrationResult}
      */
     public RegistrationResult promptAndRegister() {
-        out.println("\n==================================================");
-        out.println("          AlumConnect User Registration           ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "AlumConnect User Registration");
 
         // 1. Role Selection
         Role role = promptRole();
@@ -56,14 +54,14 @@ public class RegistrationUI {
         }
 
         // 2. Common Information
-        out.println("\n--- Basic Account Details ---");
+        ConsoleFormatter.printSubHeader(out, "Basic Account Details");
         String fullName = promptRequired("Full Name: ");
         String email = promptRequired("Email: ");
         String password = promptRequired("Password: ");
         String confirmPassword = promptRequired("Confirm Password: ");
         String phone = promptOptional("Phone number (optional): ");
 
-        out.println("\n--- Academic Information ---");
+        ConsoleFormatter.printSubHeader(out, "Academic Information");
         String department = promptRequired("Department (e.g. Computer Science): ");
         Integer graduationYear = promptInteger("Graduation Year (1950 - 2100): ");
 
@@ -99,6 +97,7 @@ public class RegistrationUI {
         out.println("Select Account Type:");
         out.println("  [1] Student (Enrolled student seeking mentorship & networking)");
         out.println("  [2] Alumni  (Graduated alumnus offering mentorship)");
+        out.println("  [0] Cancel  (Return to previous menu)");
         out.print("Enter choice (1 or 2): ");
         String choice = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
 
@@ -106,6 +105,9 @@ public class RegistrationUI {
             return Role.STUDENT;
         } else if ("2".equals(choice) || "alumni".equalsIgnoreCase(choice)) {
             return Role.ALUMNI;
+        } else if ("0".equals(choice) || "cancel".equalsIgnoreCase(choice)) {
+            out.println("[AlumConnect] Registration cancelled by user.");
+            return null;
         } else {
             out.println("[Error] Invalid selection. Please enter 1 for Student or 2 for Alumni.");
             return null;
@@ -115,7 +117,7 @@ public class RegistrationUI {
     // ── Field Prompts ─────────────────────────────────────────────────────────
 
     private void promptStudentFields(RegistrationRequest request) {
-        out.println("\n--- Student Profile Details ---");
+        ConsoleFormatter.printSubHeader(out, "Student Profile Details");
         String degree = promptOptional("Degree programme (press Enter for '" + Student.DEFAULT_DEGREE + "'): ");
         if (!degree.isEmpty()) request.setDegree(degree);
 
@@ -142,7 +144,7 @@ public class RegistrationUI {
     }
 
     private void promptAlumniFields(RegistrationRequest request) {
-        out.println("\n--- Alumni Profile Details ---");
+        ConsoleFormatter.printSubHeader(out, "Alumni Profile Details");
         String degree = promptOptional("Degree completed (press Enter for '" + Alumni.DEFAULT_DEGREE + "'): ");
         if (!degree.isEmpty()) request.setDegree(degree);
 
@@ -216,9 +218,9 @@ public class RegistrationUI {
     // ── Result Display ───────────────────────────────────────────────────────
 
     public void displayResult(RegistrationResult result) {
-        out.println("\n--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         if (result.isSuccess()) {
-            out.println("[SUCCESS] " + result.getMessage());
+            ConsoleFormatter.printSuccess(out, result.getMessage());
             if (result.getUser() != null) {
                 out.println("  • User ID:  " + result.getUser().getId());
                 out.println("  • Name:     " + result.getUser().getFullName());
@@ -226,7 +228,7 @@ public class RegistrationUI {
                 out.println("  • Role:     " + result.getUser().getRole());
             }
         } else {
-            out.println("[ERROR] " + result.getMessage());
+            ConsoleFormatter.printError(out, result.getMessage());
             if (!result.getErrors().isEmpty()) {
                 out.println("Details:");
                 for (String err : result.getErrors()) {
@@ -234,6 +236,7 @@ public class RegistrationUI {
                 }
             }
         }
-        out.println("--------------------------------------------------\n");
+        ConsoleFormatter.printDivider(out);
+        out.println();
     }
 }

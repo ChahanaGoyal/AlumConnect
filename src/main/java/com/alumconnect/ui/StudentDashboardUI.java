@@ -244,9 +244,7 @@ public class StudentDashboardUI {
      * @param student the currently logged-in Student
      */
     private void printHeader(Student student) {
-        out.println("\n==================================================");
-        out.println("               STUDENT DASHBOARD                  ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "STUDENT DASHBOARD");
         out.println("Welcome, " + student.getFullName() + "!");
         out.println("Department : " + student.getDepartment()
                 + " | Semester: " + student.getCurrentSemester()
@@ -257,7 +255,7 @@ public class StudentDashboardUI {
         if (student.getSkills() != null && !student.getSkills().isBlank()) {
             out.println("Skills     : " + student.getSkills());
         }
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
         out.println("Student Menu:");
         out.println("  [" + OPTION_PROFILE       + "] My Profile");
         out.println("  [" + OPTION_BROWSE_ALUMNI + "] Browse Alumni");
@@ -267,7 +265,7 @@ public class StudentDashboardUI {
         out.println("  [" + OPTION_MY_CONNECTIONS+ "] My Mentorship Connections");
         out.println("  [" + OPTION_LOGOUT        + "] Logout");
         out.println("  [" + OPTION_EXIT          + "] Exit");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
     }
 
     // ── Menu dispatch ─────────────────────────────────────────────────────────
@@ -376,33 +374,32 @@ public class StudentDashboardUI {
     public void handleMyMentorshipRequests(Student student) {
         validateStudentSession();
 
-        out.println("\n==================================================");
-        out.println("             MY MENTORSHIP REQUESTS               ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "MY MENTORSHIP REQUESTS");
 
         MentorshipRequestResult result = mentorshipRequestService.getRequestsForStudent(student.getId());
         if (!result.isSuccess()) {
             out.println("[ERROR] " + result.getMessage());
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         List<MentorshipRequest> requests = result.getRequests();
         if (requests.isEmpty()) {
             out.println("[INFO] You have not sent any mentorship requests yet.");
-            out.println("==================================================");
+            out.println("You currently have no pending mentorship requests.");
+            ConsoleFormatter.printDoubleDivider(out);
             out.println("[AlumConnect] Returning to Student Dashboard.");
             return;
         }
 
         out.println("Displaying " + requests.size() + " sent mentorship request(s):");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         for (int i = 0; i < requests.size(); i++) {
             printStudentRequestCard(i + 1, requests.get(i));
         }
 
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
         out.println("[INFO] End of Mentorship Requests.");
         out.println("[AlumConnect] Returning to Student Dashboard.");
     }
@@ -471,33 +468,31 @@ public class StudentDashboardUI {
     public void handleMyMentorshipConnections(Student student) {
         validateStudentSession();
 
-        out.println("\n==================================================");
-        out.println("            MY MENTORSHIP CONNECTIONS             ");
-        out.println("==================================================");
+        ConsoleFormatter.printAppHeader(out, "MY MENTORSHIP CONNECTIONS");
 
         MentorshipRequestResult result = mentorshipRequestService.getConnectionsForStudent(student.getId());
         if (!result.isSuccess()) {
             out.println("[ERROR] " + result.getMessage());
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             return;
         }
 
         List<MentorshipRequest> connections = result.getRequests();
         if (connections.isEmpty()) {
             out.println("[INFO] You have no active mentorship connections yet.");
-            out.println("==================================================");
+            ConsoleFormatter.printDoubleDivider(out);
             out.println("[AlumConnect] Returning to Student Dashboard.");
             return;
         }
 
         out.println("Displaying " + connections.size() + " active mentorship connection(s):");
-        out.println("--------------------------------------------------");
+        ConsoleFormatter.printDivider(out);
 
         for (int i = 0; i < connections.size(); i++) {
             printStudentConnectionCard(i + 1, connections.get(i));
         }
 
-        out.println("==================================================");
+        ConsoleFormatter.printDoubleDivider(out);
         out.println("[INFO] End of Mentorship Connections.");
         out.println("[AlumConnect] Returning to Student Dashboard.");
     }
@@ -566,10 +561,11 @@ public class StudentDashboardUI {
      */
     public void handleProfileSubMenu() {
         validateStudentSession();
-        out.println("\n--- My Profile ---");
+        ConsoleFormatter.printSubHeader(out, "My Profile");
         out.println("  [V] View my profile");
         out.println("  [C] Create my profile");
         out.println("  [E] Edit / Update my profile");
+        out.println("  [0] Back to Student Dashboard");
         out.print("Select: ");
 
         if (!scanner.hasNextLine()) {
@@ -579,9 +575,10 @@ public class StudentDashboardUI {
 
         try {
             switch (sub) {
-                case "V" -> studentProfileUI.displayMyProfile();
-                case "C" -> studentProfileUI.promptAndCreateProfile();
-                case "E" -> studentProfileUI.promptAndEditProfile();
+                case "V", "1", "VIEW" -> studentProfileUI.displayMyProfile();
+                case "C", "2", "CREATE" -> studentProfileUI.promptAndCreateProfile();
+                case "E", "3", "EDIT", "UPDATE" -> studentProfileUI.promptAndEditProfile();
+                case "0", "B", "BACK" -> out.println("[AlumConnect] Returning to Student Dashboard.");
                 default  -> out.println("[AlumConnect] Invalid sub-option '" + sub + "'.");
             }
         } catch (SecurityException e) {

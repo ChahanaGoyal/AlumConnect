@@ -1118,6 +1118,227 @@ class MentorshipRequestServiceTest {
         assertThrows(SecurityException.class, () -> requestService.getAlumniConnections(999));
     }
 
+    // ── Phase 4: Cross-Student Isolation & Mentorship Data Integrity Tests ──────
+
+    @Test
+    @DisplayName("50. Two students sending requests to same alumni — both appear with correct student details")
+    void testTwoStudentsSendingToSameAlumni() {
+        // Student 1 sends to alumni 202
+        MentorshipRequest req1 = new MentorshipRequest(101, 202, "Machine Learning Help", "Need ML guidance");
+        req1.setId(50);
+        req1.setStatus(MentorshipStatus.PENDING);
+        req1.setStudentName("Aman Verma");
+        req1.setStudentEmail("student@thapar.edu");
+        req1.setStudentDepartment("Computer Science");
+        req1.setStudentGraduationYear(2026);
+        fakeRequestRepository.addRequest(req1);
+
+        // Student 2 (ID 102) sends to alumni 202
+        MentorshipRequest req2 = new MentorshipRequest(102, 202, "Cloud Architecture", "Need cloud advice");
+        req2.setId(51);
+        req2.setStatus(MentorshipStatus.PENDING);
+        req2.setStudentName("Priya Singh");
+        req2.setStudentEmail("priya@thapar.edu");
+        req2.setStudentDepartment("Information Technology");
+        req2.setStudentGraduationYear(2025);
+        fakeRequestRepository.addRequest(req2);
+
+        UserSession.getInstance().login(targetAlumni); // alumni ID 202
+
+        MentorshipRequestResult result = requestService.getRequestsForAlumni(202);
+
+        assertTrue(result.isSuccess(), "Alumni 202 should successfully fetch their requests");
+        assertEquals(2, result.getRequests().size(), "Alumni 202 should see exactly 2 requests");
+
+        // Verify student 1's request data is not mixed with student 2's
+        MentorshipRequest r1 = result.getRequests().stream()
+                .filter(r -> r.getId() == 50).findFirst().orElse(null);
+        assertNotNull(r1, "Request from student 1 (ID 50) must be present");
+        assertEquals(101, r1.getStudentId(), "student_id must be 101 (not 102)");
+        assertEquals(202, r1.getAlumniId(), "alumni_id must be 202");
+        assertEquals("Aman Verma", r1.getStudentName());
+        assertEquals("student@thapar.edu", r1.getStudentEmail());
+        assertEquals("Computer Science", r1.getStudentDepartment());
+        assertEquals(2026, r1.getStudentGraduationYear());
+        assertEquals("Machine Learning Help", r1.getTopic());
+
+        // Verify student 2's request data is not mixed with student 1's
+        MentorshipRequest r2 = result.getRequests().stream()
+                .filter(r -> r.getId() == 51).findFirst().orElse(null);
+        assertNotNull(r2, "Request from student 2 (ID 51) must be present");
+        assertEquals(102, r2.getStudentId(), "student_id must be 102 (not 101)");
+        assertEquals(202, r2.getAlumniId(), "alumni_id must be 202");
+        assertEquals("Priya Singh", r2.getStudentName());
+        assertEquals("priya@thapar.edu", r2.getStudentEmail());
+        assertEquals("Information Technology", r2.getStudentDepartment());
+        assertEquals(2025, r2.getStudentGraduationYear());
+        assertEquals("Cloud Architecture", r2.getTopic());
+    }
+
+    @Test
+    @DisplayName("51. Alumni B cannot see requests addressed to Alumni A (cross-alumni isolation)")
+    void testAlumniBCannotSeeAlumniAsRequests() {
+        // A request addressed to alumni 202 (targetAlumni)
+        MentorshipRequest req = new MentorshipRequest(101, 202, "Topic for Alumni A", "Message for Alumni A");
+        req.setId(60);
+        req.setStatus(MentorshipStatus.PENDING);
+        fakeRequestRepository.addRequest(req);
+
+        // Log in as alumni 303 (otherAlumni) — should NOT see this request
+        UserSession.getInstance().login(otherAlumni); // ID 303
+
+        MentorshipRequestResult result = requestService.getRequestsForAlumni(303);
+        assertTrue(result.isSuccess());
+        assertTrue(result.getRequests().isEmpty(),
+                "Alumni 303 must not see requests addressed to alumni 202");
+    }
+
+    @Test
+    @DisplayName("52. student_id and alumni_id are never interchanged in createRequest DTO")
+    void testStudentIdAndAlumniIdNeverInterchangedInDto() {
+        UserSession.getInstance().login(loggedInStudent); // ID 101
+
+        MentorshipRequestResult result = requestService.sendRequest(
+                202, // alumniId
+                "Career Planning",
+                "I need career guidance for software engineering roles."
+        );
+
+        assertTrue(result.isSuccess(), "Request should be created successfully");
+
+        MentorshipRequestDto dto = fakeRequestRepository.getLastCreatedDto();
+        assertNotNull(dto, "DTO should have been recorded");
+
+        // The student who is sending (101) must be student_id
+        assertEquals(101, dto.getStudentId(),
+                "student_id must be the logged-in student's ID (101), not the alumni's ID");
+        // The alumni receiving (202) must be alumni_id
+        assertEquals(202, dto.getAlumniId(),
+                "alumni_id must be the target alumni's ID (202), not the student's ID");
+
+        // Explicit guard: they must not be swapped
+        assertNotEquals(dto.getStudentId(), dto.getAlumniId(),
+                "student_id and alumni_id must never be equal for distinct users");
+    }
+
+    @Test
+    @DisplayName("53. Accept action updates the correct request only — other requests remain PENDING")
+    void testAcceptUpdatesCorrectRequestOnly() throws Exception {
+        // Two pending requests to same alumni
+        MentorshipRequest req1 = new MentorshipRequest(101, 202, "Topic A", "Msg A");
+        req1.setId(70);
+        req1.setStatus(MentorshipStatus.PENDING);
+        fakeRequestRepository.addRequest(req1);
+
+        MentorshipRequest req2 = new MentorshipRequest(102, 202, "Topic B", "Msg B");
+        req2.setId(71);
+        req2.setStatus(MentorshipStatus.PENDING);
+        fakeRequestRepository.addRequest(req2);
+
+        UserSession.getInstance().login(targetAlumni); // alumni 202
+
+        // Accept only request 70
+        MentorshipRequestResult result = requestService.acceptRequest(70);
+        assertTrue(result.isSuccess(), "Accepting request 70 should succeed");
+
+        // Request 70 should now be ACCEPTED
+        MentorshipRequest updated70 = fakeRequestRepository.findRequestById(70).orElse(null);
+        assertNotNull(updated70);
+        assertEquals(MentorshipStatus.ACCEPTED, updated70.getStatus(),
+                "Request 70 must be ACCEPTED after accept action");
+
+        // Request 71 must still be PENDING — not accidentally updated
+        MentorshipRequest updated71 = fakeRequestRepository.findRequestById(71).orElse(null);
+        assertNotNull(updated71);
+        assertEquals(MentorshipStatus.PENDING, updated71.getStatus(),
+                "Request 71 must remain PENDING — only request 70 was accepted");
+    }
+
+    @Test
+    @DisplayName("54. Reject action updates the correct request only — other requests remain PENDING")
+    void testRejectUpdatesCorrectRequestOnly() throws Exception {
+        MentorshipRequest req1 = new MentorshipRequest(101, 202, "Topic X", "Msg X");
+        req1.setId(80);
+        req1.setStatus(MentorshipStatus.PENDING);
+        fakeRequestRepository.addRequest(req1);
+
+        MentorshipRequest req2 = new MentorshipRequest(102, 202, "Topic Y", "Msg Y");
+        req2.setId(81);
+        req2.setStatus(MentorshipStatus.PENDING);
+        fakeRequestRepository.addRequest(req2);
+
+        UserSession.getInstance().login(targetAlumni); // alumni 202
+
+        // Reject only request 81
+        MentorshipRequestResult result = requestService.rejectRequest(81);
+        assertTrue(result.isSuccess(), "Rejecting request 81 should succeed");
+
+        // Request 81 must be REJECTED
+        MentorshipRequest updated81 = fakeRequestRepository.findRequestById(81).orElse(null);
+        assertNotNull(updated81);
+        assertEquals(MentorshipStatus.REJECTED, updated81.getStatus(),
+                "Request 81 must be REJECTED after reject action");
+
+        // Request 80 must remain PENDING
+        MentorshipRequest updated80 = fakeRequestRepository.findRequestById(80).orElse(null);
+        assertNotNull(updated80);
+        assertEquals(MentorshipStatus.PENDING, updated80.getStatus(),
+                "Request 80 must remain PENDING — only request 81 was rejected");
+    }
+
+    @Test
+    @DisplayName("55. Alumni dashboard shows only PENDING requests in incoming section (not accepted/rejected)")
+    void testAlumniOnlySeesAllRequestsRetrievedButWebViewsFiltersPending() {
+        // A pending request
+        MentorshipRequest pending = new MentorshipRequest(101, 202, "Pending Topic", "Msg pending");
+        pending.setId(90);
+        pending.setStatus(MentorshipStatus.PENDING);
+        pending.setStudentName("Aman Verma");
+        fakeRequestRepository.addRequest(pending);
+
+        // An already-accepted request (should NOT appear in incoming PENDING section)
+        MentorshipRequest accepted = new MentorshipRequest(102, 202, "Accepted Topic", "Msg accepted");
+        accepted.setId(91);
+        accepted.setStatus(MentorshipStatus.ACCEPTED);
+        accepted.setStudentName("Priya Singh");
+        fakeRequestRepository.addRequest(accepted);
+
+        // A rejected request (should NOT appear in incoming PENDING section)
+        MentorshipRequest rejected = new MentorshipRequest(103, 202, "Rejected Topic", "Msg rejected");
+        rejected.setId(92);
+        rejected.setStatus(MentorshipStatus.REJECTED);
+        rejected.setStudentName("Rahul Kumar");
+        fakeRequestRepository.addRequest(rejected);
+
+        UserSession.getInstance().login(targetAlumni); // alumni 202
+
+        // The service returns all requests (3 total)
+        MentorshipRequestResult result = requestService.getRequestsForAlumni(202);
+        assertTrue(result.isSuccess());
+        assertEquals(3, result.getRequests().size(), "Service returns all 3 requests");
+
+        // Filter as WebViews does: only PENDING should appear in incoming section
+        List<MentorshipRequest> pendingOnly = result.getRequests().stream()
+                .filter(r -> r.getStatus() == MentorshipStatus.PENDING)
+                .toList();
+        assertEquals(1, pendingOnly.size(), "Only 1 PENDING request should appear in incoming section");
+        assertEquals("Aman Verma", pendingOnly.get(0).getStudentName(),
+                "The pending request must display the correct student name");
+        assertEquals("Pending Topic", pendingOnly.get(0).getTopic());
+
+        // Accepted request must NOT be in the pending-incoming section
+        boolean acceptedInPendingSection = pendingOnly.stream()
+                .anyMatch(r -> r.getStatus() == MentorshipStatus.ACCEPTED);
+        assertFalse(acceptedInPendingSection,
+                "Accepted requests must NOT appear in the incoming pending section");
+
+        // Rejected request must NOT be in the pending-incoming section
+        boolean rejectedInPendingSection = pendingOnly.stream()
+                .anyMatch(r -> r.getStatus() == MentorshipStatus.REJECTED);
+        assertFalse(rejectedInPendingSection,
+                "Rejected requests must NOT appear in the incoming pending section");
+    }
+
     // ── In-Memory MentorshipRequestRepository Fake ──────────────────────────
 
     private static class InMemoryMentorshipRequestRepository implements MentorshipRequestRepository {

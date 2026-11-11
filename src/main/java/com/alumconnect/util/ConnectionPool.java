@@ -48,9 +48,9 @@ public final class ConnectionPool {
      * @throws IllegalStateException if the pool cannot be initialised
      */
     public static ConnectionPool getInstance() {
-        if (instance == null) {
+        if (instance == null || instance.closed) {
             synchronized (ConnectionPool.class) {
-                if (instance == null) {
+                if (instance == null || instance.closed) {
                     instance = new ConnectionPool();
                 }
             }
@@ -186,6 +186,11 @@ public final class ConnectionPool {
      */
     public void shutdown() {
         closed = true;
+        synchronized (ConnectionPool.class) {
+            if (instance == this) {
+                instance = null;
+            }
+        }
         synchronized (this) {
             for (Connection conn : allConnections) {
                 closeQuietly(conn);

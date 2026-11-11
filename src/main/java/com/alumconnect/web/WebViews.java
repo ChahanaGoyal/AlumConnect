@@ -636,17 +636,25 @@ public final class WebViews {
                 .append(menteeCount).append(" / ").append(maxMentees).append("</span>");
         sb.append("</div></div>");
 
-        // Section: Incoming Mentorship Requests
-        sb.append("<div class=\"card\">");
-        sb.append("<div class=\"card-title\"><span>📬 Incoming Mentorship Requests (").append(incomingRequests != null ? incomingRequests.size() : 0).append(")</span></div>");
+        // Section: Incoming Mentorship Requests (PENDING only)
+        // Filter to only show PENDING requests in this section; accepted/rejected
+        // requests are shown in the Active Mentees & Connections section below.
+        List<MentorshipRequest> pendingIncoming = incomingRequests != null
+                ? incomingRequests.stream()
+                        .filter(r -> r.getStatus() == MentorshipStatus.PENDING)
+                        .toList()
+                : Collections.emptyList();
 
-        if (incomingRequests == null || incomingRequests.isEmpty()) {
+        sb.append("<div class=\"card\">");
+        sb.append("<div class=\"card-title\"><span>📬 Incoming Mentorship Requests (").append(pendingIncoming.size()).append(")</span></div>");
+
+        if (pendingIncoming.isEmpty()) {
             sb.append("<div style=\"text-align: center; padding: 24px; color: var(--text-muted);\">No pending mentorship requests at this time.</div>");
         } else {
             sb.append("<div class=\"table-wrap\"><table><thead><tr>");
             sb.append("<th>ID</th><th>Student Name</th><th>Department &amp; Year</th><th>Topic</th><th>Message</th><th>Received Date</th><th>Actions</th>");
             sb.append("</tr></thead><tbody>");
-            for (MentorshipRequest req : incomingRequests) {
+            for (MentorshipRequest req : pendingIncoming) {
                 sb.append("<tr>");
                 sb.append("<td>#").append(req.getId()).append("</td>");
                 sb.append("<td><strong>").append(HttpUtil.escapeHtml(req.getStudentName() != null ? req.getStudentName() : "Student #" + req.getStudentId())).append("</strong><br>")
@@ -659,14 +667,14 @@ public final class WebViews {
                 sb.append("<td style=\"white-space: nowrap;\">");
                 sb.append("<div style=\"display: flex; gap: 6px;\">");
 
-                // Accept form
+                // Accept form — only rendered for PENDING requests
                 sb.append("<form method=\"POST\" action=\"/alumni/request-action\" style=\"display:inline;\">");
                 sb.append("<input type=\"hidden\" name=\"requestId\" value=\"").append(req.getId()).append("\">");
                 sb.append("<input type=\"hidden\" name=\"action\" value=\"accept\">");
                 sb.append("<button type=\"submit\" class=\"btn btn-success btn-sm\">Accept</button>");
                 sb.append("</form>");
 
-                // Reject form
+                // Reject form — only rendered for PENDING requests
                 sb.append("<form method=\"POST\" action=\"/alumni/request-action\" style=\"display:inline;\">");
                 sb.append("<input type=\"hidden\" name=\"requestId\" value=\"").append(req.getId()).append("\">");
                 sb.append("<input type=\"hidden\" name=\"action\" value=\"reject\">");

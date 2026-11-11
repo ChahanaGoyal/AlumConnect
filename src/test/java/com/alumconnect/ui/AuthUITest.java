@@ -257,7 +257,7 @@ class AuthUITest {
     @Test
     @DisplayName("AuthUI interactive promptAndLogin simulation for Student")
     void testAuthUIInteractiveStudentLogin() {
-        String input = "student@thapar.edu\nStudentP@ss123\n";
+        String input = "1\nstudent@thapar.edu\nStudentP@ss123\n";
         ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -266,6 +266,7 @@ class AuthUITest {
 
         assertTrue(result.isSuccess());
         String consoleOutput = out.toString(StandardCharsets.UTF_8);
+        assertTrue(consoleOutput.contains("SELECT LOGIN TYPE"));
         assertTrue(consoleOutput.contains("STUDENT DASHBOARD"));
         assertTrue(consoleOutput.contains("Aman Sharma"));
         assertTrue(consoleOutput.contains("Student Menu"));
@@ -278,7 +279,7 @@ class AuthUITest {
     @Test
     @DisplayName("AuthUI interactive promptAndLogin simulation for Alumni")
     void testAuthUIInteractiveAlumniLogin() {
-        String input = "alumni@thapar.edu\nAlumniP@ss123\n";
+        String input = "2\nalumni@thapar.edu\nAlumniP@ss123\n";
         ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -287,9 +288,118 @@ class AuthUITest {
 
         assertTrue(result.isSuccess());
         String consoleOutput = out.toString(StandardCharsets.UTF_8);
+        assertTrue(consoleOutput.contains("SELECT LOGIN TYPE"));
         assertTrue(consoleOutput.contains("ALUMNI DASHBOARD"));
         assertTrue(consoleOutput.contains("Priya Verma"));
         assertTrue(consoleOutput.contains("Alumni Menu"));
+    }
+
+    @Test
+    @DisplayName("Login menu option 1 opens Student Login flow")
+    void testLoginMenuOption1OpensStudentLogin() {
+        String input = "1\nstudent@thapar.edu\nStudentP@ss123\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AuthUI authUI = new AuthUI(userService, in, new PrintStream(out));
+        LoginResult result = authUI.promptAndLogin();
+
+        assertTrue(result.isSuccess());
+        assertTrue(UserSession.getInstance().isStudent());
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("SELECT LOGIN TYPE"));
+        assertTrue(output.contains("Student Login"));
+        assertTrue(output.contains("STUDENT DASHBOARD"));
+    }
+
+    @Test
+    @DisplayName("Login menu option 2 opens Alumni Login flow")
+    void testLoginMenuOption2OpensAlumniLogin() {
+        String input = "2\nalumni@thapar.edu\nAlumniP@ss123\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AuthUI authUI = new AuthUI(userService, in, new PrintStream(out));
+        LoginResult result = authUI.promptAndLogin();
+
+        assertTrue(result.isSuccess());
+        assertTrue(UserSession.getInstance().isAlumni());
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("SELECT LOGIN TYPE"));
+        assertTrue(output.contains("Alumni Login"));
+        assertTrue(output.contains("ALUMNI DASHBOARD"));
+    }
+
+    @Test
+    @DisplayName("Login menu option 0 cancels and returns to Main Menu")
+    void testLoginMenuOption0ReturnsToMainMenu() {
+        String input = "0\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AuthUI authUI = new AuthUI(userService, in, new PrintStream(out));
+        LoginResult result = authUI.promptAndLogin();
+
+        assertFalse(result.isSuccess());
+        assertEquals("Login cancelled by user.", result.getMessage());
+        assertFalse(UserSession.getInstance().isLoggedIn());
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("SELECT LOGIN TYPE"));
+        assertTrue(output.contains("Login cancelled."));
+    }
+
+    @Test
+    @DisplayName("Login menu handles invalid choice, shows error, and reprompts")
+    void testLoginMenuInvalidChoiceReprompts() {
+        // Choice 9 -> invalid, choice 3 -> invalid, then 0 -> cancel
+        String input = "9\n3\n0\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AuthUI authUI = new AuthUI(userService, in, new PrintStream(out));
+        LoginResult result = authUI.promptAndLogin();
+
+        assertFalse(result.isSuccess());
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("Invalid choice '9'"));
+        assertTrue(output.contains("Invalid choice '3'"));
+        assertTrue(output.contains("Login cancelled."));
+    }
+
+    @Test
+    @DisplayName("Alumni account cannot log in via Student Login flow")
+    void testAlumniCannotLoginViaStudentLogin() {
+        // Option 1 (Student Login), but provide Alumni credentials
+        String input = "1\nalumni@thapar.edu\nAlumniP@ss123\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AuthUI authUI = new AuthUI(userService, in, new PrintStream(out));
+        LoginResult result = authUI.promptAndLogin();
+
+        assertFalse(result.isSuccess());
+        assertFalse(UserSession.getInstance().isLoggedIn());
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR]"));
+        assertTrue(output.contains("cannot log in via Student Login"));
+    }
+
+    @Test
+    @DisplayName("Student account cannot log in via Alumni Login flow")
+    void testStudentCannotLoginViaAlumniLogin() {
+        // Option 2 (Alumni Login), but provide Student credentials
+        String input = "2\nstudent@thapar.edu\nStudentP@ss123\n";
+        ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        AuthUI authUI = new AuthUI(userService, in, new PrintStream(out));
+        LoginResult result = authUI.promptAndLogin();
+
+        assertFalse(result.isSuccess());
+        assertFalse(UserSession.getInstance().isLoggedIn());
+        String output = out.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[ERROR]"));
+        assertTrue(output.contains("cannot log in via Alumni Login"));
     }
 
     // ── In-Memory Repository Fake ─────────────────────────────────────────────

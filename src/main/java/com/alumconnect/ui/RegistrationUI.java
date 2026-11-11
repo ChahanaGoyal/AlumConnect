@@ -6,9 +6,11 @@ import com.alumconnect.model.Student;
 import com.alumconnect.service.UserService;
 import com.alumconnect.service.dto.RegistrationRequest;
 import com.alumconnect.service.dto.RegistrationResult;
+import com.alumconnect.util.PasswordUtil;
 
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -20,6 +22,7 @@ import java.util.Scanner;
 public class RegistrationUI {
 
     private final UserService userService;
+    private final InputStream in;
     private final Scanner scanner;
     private final PrintStream out;
 
@@ -33,6 +36,7 @@ public class RegistrationUI {
 
     public RegistrationUI(UserService userService, InputStream in, PrintStream out) {
         this.userService = userService;
+        this.in = in;
         this.scanner = new Scanner(in);
         this.out = out;
     }
@@ -57,8 +61,24 @@ public class RegistrationUI {
         ConsoleFormatter.printSubHeader(out, "Basic Account Details");
         String fullName = promptRequired("Full Name: ");
         String email = promptRequired("Email: ");
-        String password = promptRequired("Password: ");
-        String confirmPassword = promptRequired("Confirm Password: ");
+
+        // Immediate password validation and retry loop
+        String password = promptValidatedPassword();
+        if (password == null) {
+            RegistrationResult failure = RegistrationResult.failure("Registration cancelled: Incomplete input.");
+            displayResult(failure);
+            return failure;
+        }
+
+        // Confirm password prompt with immediate mismatch check
+        String confirmPassword = promptMatchingConfirmPassword(password);
+        if (confirmPassword == null) {
+            RegistrationResult failure = RegistrationResult.failure("Registration cancelled: Incomplete input.");
+            displayResult(failure);
+            return failure;
+        }
+
+        // Only after successful password validation and confirmation, proceed to remaining details
         String phone = promptOptional("Phone number (optional): ");
 
         ConsoleFormatter.printSubHeader(out, "Academic Information");
@@ -213,6 +233,67 @@ public class RegistrationUI {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Prompts the user for a password and immediately validates it against all security rules.
+     * If invalid, displays the exact validation errors immediately and prompts again.
+     *
+     * @return a valid password string, or {@code null} if input is exhausted
+     */
+    private String promptValidatedPassword() {
+        while (true) {
+            String password = promptPassword("Password: ");
+            if (password == null) {
+                return null;
+            }
+            List<String> errors = PasswordUtil.getPasswordRequirementErrors(password);
+            if (errors.isEmpty()) {
+                return password;
+            }
+            ConsoleFormatter.printError(out, "Password does not meet requirements:");
+            for (String err : errors) {
+                out.println("  - " + err);
+            }
+            out.println("Please enter a new password that satisfies all requirements.\n");
+        }
+    }
+
+    /**
+     * Prompts the user for confirm password and validates that it matches the entered password.
+     * If they do not match, displays an error immediately and prompts to confirm again.
+     *
+     * @param validPassword the previously validated password
+     * @return matching confirm password string, or {@code null} if input is exhausted
+     */
+    private String promptMatchingConfirmPassword(String validPassword) {
+        while (true) {
+            String confirmPassword = promptPassword("Confirm Password: ");
+            if (confirmPassword == null) {
+                return null;
+            }
+            if (validPassword.equals(confirmPassword)) {
+                return confirmPassword;
+            }
+            ConsoleFormatter.printError(out, "Passwords do not match.");
+            out.println("Please confirm your password again.\n");
+        }
+    }
+
+    /**
+     * Reads a password from the console, masking input when running attached to an interactive console.
+     * Never prints or logs the entered password.
+     *
+     * @param label prompt label
+     * @return entered password string, or {@code null} if input is exhausted
+     */
+    private String promptPassword(String label) {
+        if (System.console() != null && this.in == System.in) {
+            char[] chars = System.console().readPassword("%s", label);
+            return chars != null ? new String(chars) : null;
+        }
+        out.print(label);
+        return scanner.hasNextLine() ? scanner.nextLine() : null;
     }
 
     // ── Result Display ───────────────────────────────────────────────────────

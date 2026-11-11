@@ -312,7 +312,7 @@ class StudentDashboardUITest {
     @Test
     @DisplayName("AuthUI routes Student login to Student Dashboard with correct content")
     void testAuthUIRoutesStudentToNewDashboard() {
-        String input = "student@thapar.edu\nStudentP@ss1\n0\n";
+        String input = "1\nstudent@thapar.edu\nStudentP@ss1\n0\n";
         ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream capture = new ByteArrayOutputStream();
 
@@ -330,7 +330,7 @@ class StudentDashboardUITest {
     @Test
     @DisplayName("AuthUI does not route Alumni to Student Dashboard")
     void testAuthUIDoesNotRouteAlumniToStudentDashboard() {
-        String input = "alumni@thapar.edu\nAlumniP@ss1\n0\n";
+        String input = "2\nalumni@thapar.edu\nAlumniP@ss1\n0\n";
         ByteArrayInputStream in = new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
         ByteArrayOutputStream capture = new ByteArrayOutputStream();
 

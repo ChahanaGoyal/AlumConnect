@@ -144,6 +144,158 @@ class RegistrationUITest {
         assertTrue(output.contains("Invalid role selection"));
     }
 
+    @Test
+    @DisplayName("Immediate password validation displays errors and re-prompts until valid password is provided")
+    void testImmediatePasswordValidationRejectsInvalidThenAcceptsValid() {
+        // Simulated inputs:
+        // 1: Role = Student
+        // 2: Name
+        // 3: Email
+        // 4: Password attempt 1: "weak" (invalid: < 8 chars, no uppercase, no digit, no special)
+        // 5: Password attempt 2: "NoSpecial123" (invalid: missing special char)
+        // 6: Password attempt 3: "ValidP@ssword2026" (valid!)
+        // 7: Confirm Password: "ValidP@ssword2026"
+        // 8: Phone
+        // 9: Department
+        // 10: Graduation Year
+        // 11-17: Student profile fields
+        String simulatedInput = String.join("\n",
+                "1",
+                "Charlie Davis",
+                "charlie.davis@university.edu",
+                "weak",
+                "NoSpecial123",
+                "ValidP@ssword2026",
+                "ValidP@ssword2026",
+                "+15551234567",
+                "Information Technology",
+                "2025",
+                "", // default degree
+                "7", // semester
+                "IT2025001",
+                "Java, Spring Boot",
+                "Cloud Computing",
+                "",
+                "",
+                "Senior CS undergrad"
+        ) + "\n";
+
+        ByteArrayInputStream in = new ByteArrayInputStream(simulatedInput.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream outBytes = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBytes, true, StandardCharsets.UTF_8);
+
+        StubUserRepository stubRepo = new StubUserRepository();
+        UserService userService = new UserService(stubRepo);
+        RegistrationUI ui = new RegistrationUI(userService, in, out);
+
+        RegistrationResult result = ui.promptAndRegister();
+
+        assertTrue(result.isSuccess(), "Registration should succeed after providing valid password");
+        assertNotNull(result.getUser());
+        assertEquals("charlie.davis@university.edu", result.getUser().getEmail());
+
+        String output = outBytes.toString(StandardCharsets.UTF_8);
+
+        // Verify immediate validation error messages appeared
+        assertTrue(output.contains("[ERROR] Password does not meet requirements:"),
+                "Output should report password validation failure immediately");
+        assertTrue(output.contains("Password must be at least 8 characters long."),
+                "Output should contain minimum length requirement error");
+        assertTrue(output.contains("Password must contain at least one special character"),
+                "Output should contain special character requirement error");
+
+        // Verify that academic details were asked AFTER password validation
+        int pwdPromptIdx = output.indexOf("Password:");
+        int academicIdx = output.indexOf("Academic Information");
+        assertTrue(pwdPromptIdx < academicIdx, "Password must be validated before Academic Information is prompted");
+
+        // Security check: Never print the actual entered password
+        assertFalse(output.contains("weak"), "Output must never print the invalid plain password");
+        assertFalse(output.contains("NoSpecial123"), "Output must never print the intermediate plain password");
+        assertFalse(output.contains("ValidP@ssword2026"), "Output must never print the valid plain password");
+    }
+
+    @Test
+    @DisplayName("Password mismatch prompts immediate error and requests confirmation again")
+    void testPasswordMismatchPromptsImmediateRetry() {
+        // Simulated inputs:
+        // 1: Role = Student
+        // 2: Name
+        // 3: Email
+        // 4: Password: "ValidP@ssword2026"
+        // 5: Confirm Password attempt 1: "MismatchP@ssword99" (does not match)
+        // 6: Confirm Password attempt 2: "ValidP@ssword2026" (matches!)
+        // 7: Phone
+        // 8: Department
+        // 9: Graduation Year
+        // 10-16: Student profile fields
+        String simulatedInput = String.join("\n",
+                "1",
+                "Diana Prince",
+                "diana.prince@university.edu",
+                "ValidP@ssword2026",
+                "MismatchP@ssword99",
+                "ValidP@ssword2026",
+                "+15559876543",
+                "Software Engineering",
+                "2026",
+                "", // default degree
+                "4", // semester
+                "SE2026042",
+                "Security, Cryptography",
+                "AppSec",
+                "",
+                "",
+                "Security enthusiast"
+        ) + "\n";
+
+        ByteArrayInputStream in = new ByteArrayInputStream(simulatedInput.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream outBytes = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBytes, true, StandardCharsets.UTF_8);
+
+        StubUserRepository stubRepo = new StubUserRepository();
+        UserService userService = new UserService(stubRepo);
+        RegistrationUI ui = new RegistrationUI(userService, in, out);
+
+        RegistrationResult result = ui.promptAndRegister();
+
+        assertTrue(result.isSuccess(), "Registration should succeed once confirm password matches");
+        String output = outBytes.toString(StandardCharsets.UTF_8);
+
+        assertTrue(output.contains("[ERROR] Passwords do not match."),
+                "Output should report password mismatch immediately");
+        assertTrue(output.contains("Please confirm your password again."),
+                "Output should request confirmation again upon mismatch");
+
+        // Security check: passwords are never printed
+        assertFalse(output.contains("MismatchP@ssword99"), "Output must never print mismatching password");
+        assertFalse(output.contains("ValidP@ssword2026"), "Output must never print valid password");
+    }
+
+    @Test
+    @DisplayName("Exhausted password input cancels registration gracefully without error")
+    void testExhaustedPasswordInputCancelsRegistration() {
+        // Stream terminates during password prompt
+        String simulatedInput = String.join("\n",
+                "1",
+                "Evan Wright",
+                "evan.wright@university.edu"
+        ) + "\n";
+
+        ByteArrayInputStream in = new ByteArrayInputStream(simulatedInput.getBytes(StandardCharsets.UTF_8));
+        ByteArrayOutputStream outBytes = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBytes, true, StandardCharsets.UTF_8);
+
+        StubUserRepository stubRepo = new StubUserRepository();
+        UserService userService = new UserService(stubRepo);
+        RegistrationUI ui = new RegistrationUI(userService, in, out);
+
+        RegistrationResult result = ui.promptAndRegister();
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().contains("Registration cancelled"));
+    }
+
     // ── Stub Repository ───────────────────────────────────────────────────────
 
     private static class StubUserRepository implements UserRepository {

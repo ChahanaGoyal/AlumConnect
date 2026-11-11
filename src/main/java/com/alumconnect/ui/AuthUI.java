@@ -25,6 +25,7 @@ public class AuthUI {
     private final AlumniProfileUI alumniProfileUI;
     private final StudentDashboardUI studentDashboardUI;
     private final AlumniDashboardUI alumniDashboardUI;
+    private final InputStream in;
     private final Scanner scanner;
     private final PrintStream out;
 
@@ -38,6 +39,7 @@ public class AuthUI {
 
     public AuthUI(UserService userService, InputStream in, PrintStream out) {
         this.userService = userService;
+        this.in = in;
         this.scanner = new Scanner(in);
         this.out = out;
         // Share the same scanner instance so child UIs read from the same stream without competition
@@ -74,6 +76,7 @@ public class AuthUI {
         this.userService = userService;
         this.studentProfileUI = studentProfileUI;
         this.alumniProfileUI = alumniProfileUI;
+        this.in = in;
         this.scanner = new Scanner(in);
         this.out = out;
         this.studentDashboardUI = new StudentDashboardUI(studentProfileUI, userService, this.scanner, out);
@@ -97,6 +100,7 @@ public class AuthUI {
         this.studentProfileUI = studentProfileUI;
         this.alumniProfileUI = alumniProfileUI;
         this.studentDashboardUI = studentDashboardUI;
+        this.in = in;
         this.scanner = new Scanner(in);
         this.out = out;
         this.alumniDashboardUI = new AlumniDashboardUI(alumniProfileUI, userService, this.scanner, out);
@@ -121,18 +125,79 @@ public class AuthUI {
         this.alumniProfileUI = alumniProfileUI;
         this.studentDashboardUI = studentDashboardUI;
         this.alumniDashboardUI = alumniDashboardUI;
+        this.in = in;
         this.scanner = new Scanner(in);
         this.out = out;
     }
 
     /**
-     * Prompts the user for email and password, executes login,
-     * routes to the appropriate dashboard on success, or displays error on failure.
+     * Displays the SELECT LOGIN TYPE menu and executes the selected login flow:
+     * [1] Student Login
+     * [2] Alumni Login
+     * [0] Back to Main Menu
      *
      * @return the LoginResult
      */
     public LoginResult promptAndLogin() {
-        ConsoleFormatter.printAppHeader(out, "AlumConnect Login");
+        while (true) {
+            out.println("\n" + ConsoleFormatter.DOUBLE_LINE);
+            out.println(ConsoleFormatter.center("SELECT LOGIN TYPE", ConsoleFormatter.TERMINAL_WIDTH));
+            out.println(ConsoleFormatter.DOUBLE_LINE);
+            out.println("[1] Student Login");
+            out.println("[2] Alumni Login");
+            out.println("[0] Back to Main Menu");
+            ConsoleFormatter.printDivider(out);
+            out.print("Enter your choice: ");
+
+            if (!scanner.hasNextLine()) {
+                return LoginResult.failure("Login cancelled: End of input.");
+            }
+
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1" -> {
+                    return promptStudentLogin();
+                }
+                case "2" -> {
+                    return promptAlumniLogin();
+                }
+                case "0", "BACK", "CANCEL", "EXIT" -> {
+                    out.println("[AlumConnect] Login cancelled.");
+                    return LoginResult.failure("Login cancelled by user.");
+                }
+                default -> out.println("[AlumConnect] Invalid choice '" + choice + "'. Please enter 1, 2, or 0.");
+            }
+        }
+    }
+
+    /**
+     * Prompts for Student credentials and authenticates with Student role enforcement.
+     *
+     * @return the LoginResult
+     */
+    public LoginResult promptStudentLogin() {
+        return promptRoleSpecificLogin(Role.STUDENT, "Student Login");
+    }
+
+    /**
+     * Prompts for Alumni credentials and authenticates with Alumni role enforcement.
+     *
+     * @return the LoginResult
+     */
+    public LoginResult promptAlumniLogin() {
+        return promptRoleSpecificLogin(Role.ALUMNI, "Alumni Login");
+    }
+
+    /**
+     * Prompts for credentials under a specific role, verifies role match,
+     * and routes to the appropriate dashboard on success.
+     *
+     * @param expectedRole the required Role (STUDENT or ALUMNI)
+     * @param title        the title to display on the header (e.g. "Student Login")
+     * @return the LoginResult
+     */
+    public LoginResult promptRoleSpecificLogin(Role expectedRole, String title) {
+        ConsoleFormatter.printAppHeader(out, title);
         out.println("Please enter your account credentials (or enter '0' to cancel):");
 
         out.print("Email: ");
@@ -142,20 +207,41 @@ public class AuthUI {
             return LoginResult.failure("Login cancelled by user.");
         }
 
-        out.print("Password: ");
-        String password = scanner.hasNextLine() ? scanner.nextLine() : "";
+        String password = promptPassword("Password: ");
+        if (password == null) {
+            out.println("[AlumConnect] Login cancelled.");
+            return LoginResult.failure("Login cancelled: Incomplete input.");
+        }
 
         out.println("\n[AlumConnect] Authenticating...");
         LoginResult result = userService.login(email, password);
 
-        if (result.isSuccess()) {
-            out.println("[SUCCESS] " + result.getMessage());
-            routeToDashboard(result.getUser());
-        } else {
+        if (!result.isSuccess()) {
             out.println("[ERROR] " + result.getMessage());
+            return result;
         }
 
+        User user = result.getUser();
+        if (expectedRole != null && user.getRole() != expectedRole) {
+            userService.logout();
+            String err = "Access denied: Account role [" + user.getRole() + "] cannot log in via " + title +
+                    ". Please select " + (user.getRole() == Role.STUDENT ? "Student Login" : "Alumni Login") + ".";
+            out.println("[ERROR] " + err);
+            return LoginResult.failure(err);
+        }
+
+        out.println("[SUCCESS] " + result.getMessage());
+        routeToDashboard(user);
         return result;
+    }
+
+    private String promptPassword(String label) {
+        if (System.console() != null && this.in == System.in) {
+            char[] chars = System.console().readPassword("%s", label);
+            return chars != null ? new String(chars) : null;
+        }
+        out.print(label);
+        return scanner.hasNextLine() ? scanner.nextLine() : null;
     }
 
     /**

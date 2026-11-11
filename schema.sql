@@ -116,8 +116,9 @@ CREATE TABLE mentorship_requests (
     CONSTRAINT fk_mentorship_student FOREIGN KEY (student_id) 
         REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_mentorship_alumni FOREIGN KEY (alumni_id) 
-        REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT chk_distinct_participants CHECK (student_id <> alumni_id)
+        REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+    -- NOTE: student_id <> alumni_id is enforced by MentorshipRequestService.sendRequest()
+    -- A CHECK constraint here is incompatible with MySQL 8.0 foreign key referential actions
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_mentorship_student ON mentorship_requests(student_id);

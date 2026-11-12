@@ -158,7 +158,7 @@ class RepositoryAndDatabaseDeepTest {
         }
 
         @Test
-        @DisplayName("MentorshipRequest createRequest uses parameterized INSERT query")
+        @DisplayName("MentorshipRequest createRequest uses parameterized INSERT query with requested_at")
         void testMentorshipRequestCreateParameterized() throws SQLException {
             List<String> preparedSqls = new ArrayList<>();
             Map<Integer, Object> boundParams = new HashMap<>();
@@ -172,11 +172,14 @@ class RepositoryAndDatabaseDeepTest {
             assertEquals(1, preparedSqls.size());
             String sql = preparedSqls.get(0);
             assertTrue(sql.contains("INSERT INTO mentorship_requests"), "Must be INSERT query");
-            assertTrue(sql.contains("VALUES (?, ?, ?, ?, 'PENDING')"), "Must use parameterized placeholders");
+            // requested_at is now explicitly inserted as a parameterized placeholder (6th param)
+            assertTrue(sql.contains("VALUES (?, ?, ?, ?, 'PENDING', ?)"), "Must use parameterized placeholders including requested_at");
             assertEquals(1, boundParams.get(1));
             assertEquals(2, boundParams.get(2));
             assertEquals("Topic", boundParams.get(3));
             assertEquals("Message", boundParams.get(4));
+            // boundParams.get(5) is a LocalDateTime for requested_at — verify it is not null
+            assertNotNull(boundParams.get(5), "requested_at parameter (index 5) must be set");
         }
     }
 

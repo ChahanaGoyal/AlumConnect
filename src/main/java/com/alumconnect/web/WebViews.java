@@ -7,6 +7,8 @@ import com.alumconnect.model.Role;
 import com.alumconnect.model.Student;
 import com.alumconnect.model.User;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
@@ -18,7 +20,22 @@ import java.util.Map;
  */
 public final class WebViews {
 
+    public static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Kolkata");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
+
+    /**
+     * Formats a {@link LocalDateTime} into a consistent user-facing string using
+     * Indian Standard Time (Asia/Kolkata).
+     *
+     * @param ldt timestamp to format
+     * @return formatted date string, or "-" if null
+     */
+    public static String formatDateTime(LocalDateTime ldt) {
+        if (ldt == null) {
+            return "-";
+        }
+        return ldt.format(DATE_FMT);
+    }
 
     private WebViews() {
         // Prevent instantiation
@@ -471,7 +488,7 @@ public final class WebViews {
                 sb.append("<td><a href=\"mailto:").append(HttpUtil.escapeHtml(c.getAlumniEmail() != null ? c.getAlumniEmail() : "")).append("\">")
                         .append(HttpUtil.escapeHtml(c.getAlumniEmail() != null ? c.getAlumniEmail() : "-")).append("</a></td>");
                 sb.append("<td>").append(HttpUtil.escapeHtml(c.getTopic())).append("</td>");
-                sb.append("<td>").append(c.getRespondedAt() != null ? c.getRespondedAt().format(DATE_FMT) : "-").append("</td>");
+                sb.append("<td>").append(formatDateTime(c.getRespondedAt())).append("</td>");
                 sb.append("</tr>");
             }
             sb.append("</tbody></table></div></div>");
@@ -542,7 +559,7 @@ public final class WebViews {
                 sb.append("<td>").append(HttpUtil.escapeHtml(r.getTopic())).append("</td>");
                 sb.append("<td style=\"max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;\">")
                         .append(HttpUtil.escapeHtml(r.getMessage())).append("</td>");
-                sb.append("<td>").append(r.getRequestedAt() != null ? r.getRequestedAt().format(DATE_FMT) : "-").append("</td>");
+                sb.append("<td>").append(formatDateTime(r.getRequestedAt())).append("</td>");
                 sb.append("<td>");
                 if (r.getStatus() == MentorshipStatus.PENDING) {
                     sb.append("<span class=\"badge badge-pending\">Pending</span>");
@@ -663,7 +680,7 @@ public final class WebViews {
                         .append(" (").append(req.getStudentGraduationYear() != null ? req.getStudentGraduationYear() : "-").append(")</td>");
                 sb.append("<td><strong>").append(HttpUtil.escapeHtml(req.getTopic())).append("</strong></td>");
                 sb.append("<td style=\"max-width: 250px;\">").append(HttpUtil.escapeHtml(req.getMessage())).append("</td>");
-                sb.append("<td>").append(req.getRequestedAt() != null ? req.getRequestedAt().format(DATE_FMT) : "-").append("</td>");
+                sb.append("<td>").append(formatDateTime(req.getRequestedAt())).append("</td>");
                 sb.append("<td style=\"white-space: nowrap;\">");
                 sb.append("<div style=\"display: flex; gap: 6px;\">");
 
@@ -706,7 +723,7 @@ public final class WebViews {
                 sb.append("<td>").append(HttpUtil.escapeHtml(m.getStudentDepartment() != null ? m.getStudentDepartment() : "-"))
                         .append(" (").append(m.getStudentGraduationYear() != null ? m.getStudentGraduationYear() : "-").append(")</td>");
                 sb.append("<td>").append(HttpUtil.escapeHtml(m.getTopic())).append("</td>");
-                sb.append("<td>").append(m.getRespondedAt() != null ? m.getRespondedAt().format(DATE_FMT) : "-").append("</td>");
+                sb.append("<td>").append(formatDateTime(m.getRespondedAt())).append("</td>");
                 sb.append("</tr>");
             }
             sb.append("</tbody></table></div>");

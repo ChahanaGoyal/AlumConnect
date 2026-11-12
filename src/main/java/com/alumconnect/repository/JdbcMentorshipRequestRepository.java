@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -45,14 +46,18 @@ public class JdbcMentorshipRequestRepository implements MentorshipRequestReposit
 
     @Override
     public int createRequest(MentorshipRequestDto dto) throws SQLException {
-        final String sql = "INSERT INTO mentorship_requests (student_id, alumni_id, topic, message, status) " +
-                "VALUES (?, ?, ?, ?, 'PENDING')";
+        final String sql = "INSERT INTO mentorship_requests (student_id, alumni_id, topic, message, status, requested_at) " +
+                "VALUES (?, ?, ?, ?, 'PENDING', ?)";
         try (Connection conn = connectionSupplier.get();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, dto.getStudentId());
             ps.setInt(2, dto.getAlumniId());
             ps.setString(3, dto.getTopic());
             ps.setString(4, dto.getMessage());
+            LocalDateTime reqTime = dto.getRequestedAt() != null
+                    ? dto.getRequestedAt()
+                    : LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
+            ps.setObject(5, reqTime);
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -250,10 +255,26 @@ public class JdbcMentorshipRequestRepository implements MentorshipRequestReposit
         try (Connection conn = connectionSupplier.get();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, newStatus.name());
-            ps.setTimestamp(2, respondedAt != null ? Timestamp.valueOf(respondedAt) : Timestamp.valueOf(LocalDateTime.now()));
+            LocalDateTime resp = respondedAt != null
+                    ? respondedAt
+                    : LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
+            ps.setObject(2, resp);
             ps.setInt(3, requestId);
             return ps.executeUpdate() > 0;
         }
+    }
+
+    private LocalDateTime extractLocalDateTime(ResultSet rs, String columnLabel) throws SQLException {
+        try {
+            LocalDateTime ldt = rs.getObject(columnLabel, LocalDateTime.class);
+            if (ldt != null) {
+                return ldt;
+            }
+        } catch (Exception ignored) {
+            // fallback for JDBC drivers that don't support getObject(..., LocalDateTime.class)
+        }
+        Timestamp ts = rs.getTimestamp(columnLabel);
+        return ts != null ? ts.toLocalDateTime() : null;
     }
 
     private MentorshipRequest mapRowToMentorshipRequest(ResultSet rs) throws SQLException {
@@ -271,22 +292,10 @@ public class JdbcMentorshipRequestRepository implements MentorshipRequestReposit
 
         request.setResponseNotes(rs.getString("response_notes"));
 
-        Timestamp reqAt = rs.getTimestamp("requested_at");
-        if (reqAt != null) {
-            request.setRequestedAt(reqAt.toLocalDateTime());
-        }
-        Timestamp respAt = rs.getTimestamp("responded_at");
-        if (respAt != null) {
-            request.setRespondedAt(respAt.toLocalDateTime());
-        }
-        Timestamp compAt = rs.getTimestamp("completed_at");
-        if (compAt != null) {
-            request.setCompletedAt(compAt.toLocalDateTime());
-        }
-        Timestamp upAt = rs.getTimestamp("updated_at");
-        if (upAt != null) {
-            request.setUpdatedAt(upAt.toLocalDateTime());
-        }
+        request.setRequestedAt(extractLocalDateTime(rs, "requested_at"));
+        request.setRespondedAt(extractLocalDateTime(rs, "responded_at"));
+        request.setCompletedAt(extractLocalDateTime(rs, "completed_at"));
+        request.setUpdatedAt(extractLocalDateTime(rs, "updated_at"));
 
         // Student details from JOIN
         request.setStudentName(rs.getString("student_name"));
@@ -316,22 +325,10 @@ public class JdbcMentorshipRequestRepository implements MentorshipRequestReposit
 
         request.setResponseNotes(rs.getString("response_notes"));
 
-        Timestamp reqAt = rs.getTimestamp("requested_at");
-        if (reqAt != null) {
-            request.setRequestedAt(reqAt.toLocalDateTime());
-        }
-        Timestamp respAt = rs.getTimestamp("responded_at");
-        if (respAt != null) {
-            request.setRespondedAt(respAt.toLocalDateTime());
-        }
-        Timestamp compAt = rs.getTimestamp("completed_at");
-        if (compAt != null) {
-            request.setCompletedAt(compAt.toLocalDateTime());
-        }
-        Timestamp upAt = rs.getTimestamp("updated_at");
-        if (upAt != null) {
-            request.setUpdatedAt(upAt.toLocalDateTime());
-        }
+        request.setRequestedAt(extractLocalDateTime(rs, "requested_at"));
+        request.setRespondedAt(extractLocalDateTime(rs, "responded_at"));
+        request.setCompletedAt(extractLocalDateTime(rs, "completed_at"));
+        request.setUpdatedAt(extractLocalDateTime(rs, "updated_at"));
 
         // Alumni details from JOIN
         request.setAlumniName(rs.getString("alumni_name"));

@@ -1,6 +1,7 @@
 package com.alumconnect.model;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Objects;
 
 /**
@@ -9,6 +10,8 @@ import java.util.Objects;
  * associated student or alumni information populated via table joins.
  */
 public class MentorshipRequest {
+    public static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Kolkata");
+
     private Integer id; // AUTO_INCREMENT primary key
     private int studentId; // FK to users.id (student)
     private int alumniId; // FK to users.id (alumni)
@@ -16,7 +19,7 @@ public class MentorshipRequest {
     private String message;
     private MentorshipStatus status = MentorshipStatus.PENDING;
     private String responseNotes;
-    private LocalDateTime requestedAt = LocalDateTime.now();
+    private LocalDateTime requestedAt = LocalDateTime.now(DEFAULT_ZONE);
     private LocalDateTime respondedAt;
     private LocalDateTime completedAt;
     private LocalDateTime updatedAt;
@@ -41,12 +44,16 @@ public class MentorshipRequest {
     }
 
     public MentorshipRequest(int studentId, int alumniId, String topic, String message) {
+        this(studentId, alumniId, topic, message, LocalDateTime.now(DEFAULT_ZONE));
+    }
+
+    public MentorshipRequest(int studentId, int alumniId, String topic, String message, LocalDateTime requestedAt) {
         this.studentId = studentId;
         this.alumniId = alumniId;
         this.topic = Objects.requireNonNull(topic);
         this.message = Objects.requireNonNull(message);
         this.status = MentorshipStatus.PENDING;
-        this.requestedAt = LocalDateTime.now();
+        this.requestedAt = requestedAt != null ? requestedAt : LocalDateTime.now(DEFAULT_ZONE);
     }
 
     // Getters and setters

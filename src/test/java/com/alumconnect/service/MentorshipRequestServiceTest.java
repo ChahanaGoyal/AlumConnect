@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1389,7 +1390,10 @@ class MentorshipRequestServiceTest {
             }
             this.lastCreatedDto = dto;
             int id = sequence++;
-            MentorshipRequest req = new MentorshipRequest(dto.getStudentId(), dto.getAlumniId(), dto.getTopic(), dto.getMessage());
+            LocalDateTime reqTime = dto.getRequestedAt() != null
+                    ? dto.getRequestedAt()
+                    : LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
+            MentorshipRequest req = new MentorshipRequest(dto.getStudentId(), dto.getAlumniId(), dto.getTopic(), dto.getMessage(), reqTime);
             req.setId(id);
             requests.put(id, req);
             return id;

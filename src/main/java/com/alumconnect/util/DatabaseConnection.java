@@ -42,7 +42,7 @@ public class DatabaseConnection {
     }
 
     public static Connection getConnection() throws SQLException {
-        String url = getProperty("db.url", "jdbc:mysql://localhost:3306/alumconnect_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
+        String url = getProperty("db.url", "jdbc:mysql://localhost:3306/alumconnect_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata");
         String user = getProperty("db.user", "root");
         String password = getProperty("db.password", "");
 
@@ -50,7 +50,7 @@ public class DatabaseConnection {
     }
 
     public static Connection getRootServerConnection() throws SQLException {
-        String url = getProperty("db.server.url", "jdbc:mysql://localhost:3306/?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
+        String url = getProperty("db.server.url", "jdbc:mysql://localhost:3306/?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata");
         String user = getProperty("db.user", "root");
         String password = getProperty("db.password", "");
 

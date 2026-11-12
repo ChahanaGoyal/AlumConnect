@@ -17,6 +17,7 @@ import com.alumconnect.util.UserSession;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -141,8 +142,9 @@ public class MentorshipRequestService {
                 return MentorshipRequestResult.failure("Alumni has reached the maximum number of mentees.");
             }
 
-            // 10. Create request
-            MentorshipRequestDto dto = new MentorshipRequestDto(studentId, alumniId, topic, message);
+            // 10. Create request with explicit timestamp generated once in Asia/Kolkata
+            LocalDateTime requestedAt = LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
+            MentorshipRequestDto dto = new MentorshipRequestDto(studentId, alumniId, topic, message, requestedAt);
             int requestId = requestRepository.createRequest(dto);
             if (requestId <= 0) {
                 return MentorshipRequestResult.failure("Failed to create mentorship request.");
@@ -578,8 +580,8 @@ public class MentorshipRequestService {
                         "Cannot respond to request: Request is not pending (current status: " + request.getStatus() + ").");
             }
 
-            // 8. Update status in database
-            LocalDateTime respondedAt = LocalDateTime.now();
+            // 8. Update status in database with timestamp in Asia/Kolkata
+            LocalDateTime respondedAt = LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
             boolean updated = requestRepository.updateRequestStatus(requestId, newStatus, respondedAt);
             if (!updated) {
                 return MentorshipRequestResult.failure("Failed to update mentorship request status. Please try again.");
